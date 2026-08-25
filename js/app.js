@@ -1,6 +1,6 @@
-// js/app.js
 document.addEventListener('DOMContentLoaded', function() {
     loadTrending();
+    SpatialNavigation.init();
 
     var navItems = document.querySelectorAll('.nav-item');
     for (var i = 0; i < navItems.length; i++) {
@@ -18,21 +18,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadTrending();
             } else {
                 pageTitle.innerText = 'Search';
-                document.getElementById('video-grid').innerHTML = '<div style="padding: 20px; font-size: 24px;">Search coming soon...</div>';
+                document.getElementById('video-grid').innerHTML = '<div style="color:white;text-align:center;width:100%;font-size:24px;margin-top:50px;">Search is not implemented yet.</div>';
                 SpatialNavigation.refresh();
             }
         });
     }
 
-    document.querySelector('.btn-close-player').addEventListener('click', function() {
-        var playerContainer = document.getElementById('player-container');
-        var videoPlayer = document.getElementById('video-player');
-        videoPlayer.pause();
-        videoPlayer.src = '';
-        playerContainer.classList.add('hidden');
-        SpatialNavigation.refresh();
-    });
 });
+
+function closePlayer() {
+    var playerContainer = document.getElementById('player-container');
+    var videoPlayer = document.getElementById('video-player');
+    videoPlayer.pause();
+    videoPlayer.src = '';
+    playerContainer.classList.add('hidden');
+    SpatialNavigation.refresh();
+}
 
 function loadTrending() {
     var grid = document.getElementById('video-grid');
@@ -48,21 +49,18 @@ function loadTrending() {
             var errorMsg = err.message || (typeof err === 'string' ? err : JSON.stringify(err));
             grid.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. Error: ' + errorMsg + '</div>';
             console.error(err);
-            SpatialNavigation.init();
+            SpatialNavigation.refresh();
             return;
         }
 
-        var items = result.items || [];
-        for (var i = 0; i < items.length; i++) {
-            var item = items[i];
-            var card = createVideoCard(item);
-            if (card) {
-                grid.appendChild(card);
+        if (result && result.items) {
+            for (var i = 0; i < result.items.length; i++) {
+                grid.appendChild(createVideoCard(result.items[i]));
             }
         }
         
-        // Initialize or refresh navigation after adding elements
-        SpatialNavigation.init();
+        // Refresh navigation after adding elements
+        SpatialNavigation.refresh();
     });
 }
 
@@ -100,8 +98,13 @@ function createVideoCard(item) {
 }
 
 function playVideo(item) {
+    // Push state to browser history BEFORE setting video src so the TV's Back button doesn't close the app
+    // Doing this right before video.play() cancels the autoplay in old WebKit
+    history.pushState({playerOpen: true}, "player");
+
     var name = item.name;
     var claimId = item.claim_id;
+    var apiDuration = item.value && item.value.video ? item.value.video.duration : 0;
     // Odysee direct streaming URL format
     var streamUrl = 'https://odysee.com/$/download/' + name + '/' + claimId;
 
@@ -112,17 +115,30 @@ function playVideo(item) {
     var playerContainer = document.getElementById('player-container');
     var videoPlayer = document.getElementById('video-player');
     
+    // Store API duration in the DOM so timeupdate can use it if the browser fails to calculate it
+    videoPlayer.setAttribute('data-duration', apiDuration);
+    
     videoPlayer.src = streamUrl;
     playerContainer.classList.remove('hidden');
     
-    // Autoplay fix for older WebKit
     videoPlayer.load();
-    var playPromise = videoPlayer.play();
-    if (playPromise !== undefined) {
-        playPromise.catch(function(error) {
-            console.log("Autoplay prevented:", error);
-            // Sometimes it requires user interaction first
-        });
+    
+    // Robust autoplay for older WebKit: wait for canplay event
+    var attemptPlay = function() {
+        var playPromise = videoPlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(function(error) {
+                console.log("Autoplay prevented:", error);
+            });
+        }
+        videoPlayer.removeEventListener('canplay', attemptPlay);
+    };
+    videoPlayer.addEventListener('canplay', attemptPlay);
+    
+    // Also try playing immediately just in case it's already cached or canplay doesn't fire
+    var initialPlayPromise = videoPlayer.play();
+    if (initialPlayPromise !== undefined) {
+        initialPlayPromise.catch(function(e) {});
     }
     
     // When player opens, focus the play/pause button
@@ -146,6 +162,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var progressFill = document.getElementById('progress-fill');
     var timeDisplay = document.getElementById('time-display');
     var customControls = document.getElementById('custom-controls');
+    
+    // Listen to popstate for the Back button (WebOS standard way to prevent app exit)
+    window.addEventListener('popstate', function(e) {
+        if (!document.getElementById('player-container').classList.contains('hidden')) {
+            // Close player instead of exiting app
+            closePlayer();
+        }
+    });
     
     var controlsTimeout;
     
@@ -188,17 +212,17 @@ document.addEventListener('DOMContentLoaded', function() {
             var maxTime = isNaN(videoPlayer.duration) ? videoPlayer.currentTime + SEEK_AMOUNT + 100 : videoPlayer.duration;
             videoPlayer.currentTime = Math.min(maxTime, videoPlayer.currentTime + SEEK_AMOUNT);
         }
-        // Back Button (461)
-        else if (keyCode === 461) {
+        // Back Button (461 for WebOS, 8 for Backspace, 27 for Esc, 10009 for Return)
+        else if (keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
+            // The popstate event handles the actual closing, but we still prevent default here just in case
             e.preventDefault();
-            document.getElementById('btn-close-player').click();
         }
     });
     
     btnPlayPause.addEventListener('click', function() {
         if (videoPlayer.paused) {
             videoPlayer.play();
-            btnPlayPause.innerHTML = '&#9209;'; // Stop / Square
+            btnPlayPause.innerHTML = '&#9632;'; // Stop / Square
         } else {
             videoPlayer.pause();
             btnPlayPause.innerHTML = '&#9654;'; // Play / Triangle
@@ -207,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     videoPlayer.addEventListener('play', function() {
-        btnPlayPause.innerHTML = '&#9209;'; // Stop / Square
+        btnPlayPause.innerHTML = '&#9632;'; // Stop / Square
         showControls();
     });
     
@@ -217,12 +241,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     videoPlayer.addEventListener('timeupdate', function() {
-        if (!videoPlayer.duration) return;
+        var currentTime = videoPlayer.currentTime || 0;
+        var duration = videoPlayer.duration;
+        var apiDuration = parseFloat(videoPlayer.getAttribute('data-duration')) || 0;
         
-        var percentage = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        // If TV fails to calculate duration on proxied streams (NaN or Infinity), use Odysee API duration
+        if (!duration || isNaN(duration) || duration === Infinity) {
+            duration = apiDuration;
+        }
+        
+        var percentage = 0;
+        if (duration && !isNaN(duration) && duration > 0) {
+            percentage = (currentTime / duration) * 100;
+        }
+        
         progressFill.style.width = percentage + '%';
-        
-        timeDisplay.textContent = formatTime(videoPlayer.currentTime) + ' / ' + formatTime(videoPlayer.duration);
+        timeDisplay.textContent = formatTime(currentTime) + ' / ' + formatTime(duration);
     });
     
     function formatTime(seconds) {

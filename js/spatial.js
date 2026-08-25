@@ -10,6 +10,21 @@ var SpatialNavigation = (function() {
         }
 
         window.addEventListener('keydown', handleKeyDown);
+        
+        // Sync Magic Remote pointer (mouse) with spatial navigation
+        document.addEventListener('mouseover', function(e) {
+            var target = e.target;
+            while (target && target !== document) {
+                if (target.classList && target.classList.contains('focusable')) {
+                    var idx = focusableElements.indexOf(target);
+                    if (idx !== -1 && idx !== currentFocusedIndex) {
+                        focusElement(idx);
+                    }
+                    break;
+                }
+                target = target.parentNode;
+            }
+        });
     }
 
     function refresh() {
