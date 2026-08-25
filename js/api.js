@@ -3,10 +3,10 @@ var OdyseeAPI = (function () {
     // CONFIGURATION:
     // Set to true for Emulator testing (uses local proxy to bypass SSL issues).
     // Set to false before running 'ares-package' for the physical LG TV!
-    var USE_EMULATOR_PROXY = true;
+    var USE_EMULATOR_PROXY = false;
 
-    var BASE_URL = USE_EMULATOR_PROXY 
-        ? 'http://10.0.2.2:3000' 
+    var BASE_URL = USE_EMULATOR_PROXY
+        ? 'http://10.0.2.2:3000'
         : 'https://api.na-backend.odysee.com/api/v1/proxy';
 
     function request(method, params, callback) {
@@ -14,7 +14,7 @@ var OdyseeAPI = (function () {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', BASE_URL, true);
         xhr.setRequestHeader('Content-Type', 'application/json-rpc');
-        
+
         xhr.timeout = 5000; // 5 seconds timeout
         xhr.ontimeout = function () {
             callback(new Error('Timeout: Nem érem el a ' + BASE_URL + ' címet az emulátorból!'));
