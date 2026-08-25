@@ -114,13 +114,121 @@ function playVideo(item) {
     
     videoPlayer.src = streamUrl;
     playerContainer.classList.remove('hidden');
-    videoPlayer.play();
     
-    // When player opens, focus the close button
+    // Autoplay fix for older WebKit
+    videoPlayer.load();
+    var playPromise = videoPlayer.play();
+    if (playPromise !== undefined) {
+        playPromise.catch(function(error) {
+            console.log("Autoplay prevented:", error);
+            // Sometimes it requires user interaction first
+        });
+    }
+    
+    // When player opens, focus the play/pause button
     setTimeout(function() {
         SpatialNavigation.refresh();
-        SpatialNavigation.focusElement(0); // The close button will be the first/only focusable element if others are hidden or disabled?
-        // Wait, other elements are still focusable!
-        // A better approach is to only allow focus inside player container if visible.
+        // Find the play/pause button index
+        var elements = document.querySelectorAll('.focusable');
+        for (var i = 0; i < elements.length; i++) {
+            if (elements[i].id === 'btn-play-pause') {
+                SpatialNavigation.focusElement(i);
+                break;
+            }
+        }
     }, 100);
 }
+
+// Video Player UI Logic
+document.addEventListener('DOMContentLoaded', function() {
+    var videoPlayer = document.getElementById('video-player');
+    var btnPlayPause = document.getElementById('btn-play-pause');
+    var progressFill = document.getElementById('progress-fill');
+    var timeDisplay = document.getElementById('time-display');
+    var customControls = document.getElementById('custom-controls');
+    
+    var controlsTimeout;
+    
+    function showControls() {
+        customControls.classList.remove('fade-out');
+        clearTimeout(controlsTimeout);
+        controlsTimeout = setTimeout(function() {
+            if (!videoPlayer.paused) {
+                customControls.classList.add('fade-out');
+            }
+        }, 4000);
+    }
+    
+    // Show controls on remote interaction
+    window.addEventListener('keydown', function(e) {
+        // If player is hidden, ignore media keys
+        if (document.getElementById('player-container').classList.contains('hidden')) return;
+        
+        showControls();
+        
+        var keyCode = e.keyCode;
+        var SEEK_AMOUNT = 10;
+        
+        // Media Play (415) / Pause (19) / PlayPause (179)
+        if (keyCode === 415 || keyCode === 19 || keyCode === 179 || keyCode === 13) {
+            // Allow OK button (13) to play/pause IF we don't have focus on a specific button
+            if (keyCode === 13 && document.activeElement.tagName !== 'BUTTON') {
+                btnPlayPause.click();
+            } else if (keyCode !== 13) {
+                btnPlayPause.click();
+            }
+        }
+        // Rewind (412) or Left Arrow (37)
+        else if (keyCode === 412 || keyCode === 37) {
+            videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - SEEK_AMOUNT);
+        }
+        // FastForward (417) or Right Arrow (39)
+        else if (keyCode === 417 || keyCode === 39) {
+            // If duration is unknown (NaN), just seek forward anyway
+            var maxTime = isNaN(videoPlayer.duration) ? videoPlayer.currentTime + SEEK_AMOUNT + 100 : videoPlayer.duration;
+            videoPlayer.currentTime = Math.min(maxTime, videoPlayer.currentTime + SEEK_AMOUNT);
+        }
+        // Back Button (461)
+        else if (keyCode === 461) {
+            e.preventDefault();
+            document.getElementById('btn-close-player').click();
+        }
+    });
+    
+    btnPlayPause.addEventListener('click', function() {
+        if (videoPlayer.paused) {
+            videoPlayer.play();
+            btnPlayPause.innerHTML = '&#9209;'; // Stop / Square
+        } else {
+            videoPlayer.pause();
+            btnPlayPause.innerHTML = '&#9654;'; // Play / Triangle
+            showControls(); // Keep controls visible when paused
+        }
+    });
+    
+    videoPlayer.addEventListener('play', function() {
+        btnPlayPause.innerHTML = '&#9209;'; // Stop / Square
+        showControls();
+    });
+    
+    videoPlayer.addEventListener('pause', function() {
+        btnPlayPause.innerHTML = '&#9654;'; // Play / Triangle
+        showControls();
+    });
+    
+    videoPlayer.addEventListener('timeupdate', function() {
+        if (!videoPlayer.duration) return;
+        
+        var percentage = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        progressFill.style.width = percentage + '%';
+        
+        timeDisplay.textContent = formatTime(videoPlayer.currentTime) + ' / ' + formatTime(videoPlayer.duration);
+    });
+    
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return "00:00";
+        var m = Math.floor(seconds / 60);
+        var s = Math.floor(seconds % 60);
+        return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+    }
+});

@@ -224,25 +224,72 @@ body {
     object-fit: contain;
 }
 
-.player-controls {
+.custom-controls {
     position: absolute;
-    top: 40px;
-    right: 40px;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    padding: 40px 60px;
+    display: flex;
+    flex-direction: column;
     z-index: 101;
+    transition: opacity 0.3s ease;
 }
 
-.btn-close-player {
-    background: rgba(0,0,0,0.5);
+.custom-controls.fade-out {
+    opacity: 0;
+}
+
+.progress-container {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    width: 0%;
+    height: 100%;
+    background: var(--primary-color);
+    transition: width 0.1s linear;
+}
+
+.controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.time-display {
+    color: white;
+    font-size: 24px;
+    font-weight: 500;
+    flex-grow: 1;
+    text-align: center;
+}
+
+.btn-player {
+    background: rgba(255,255,255,0.1);
     color: white;
     border: 2px solid transparent;
-    padding: 15px 30px;
+    padding: 15px 40px;
     font-size: 24px;
-    border-radius: 8px;
-    font-family: inherit;
+    border-radius: 30px;
     cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
 }
 
-.btn-close-player.focused {
+.btn-player.focused {
     border-color: var(--primary-color);
-    background: var(--primary-color);
+    background: rgba(247, 10, 141, 0.2);
+    transform: scale(1.05);
 }

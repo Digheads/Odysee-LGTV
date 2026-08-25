@@ -100,7 +100,13 @@ var SpatialNavigation = (function() {
                     if (targetRect.cy > currentRect.cy && Math.abs(dx) <= Math.abs(dy)) isValidDirection = true;
                     break;
                 case 13: // Enter
-                    current.click();
+                    if (typeof current.click === 'function') {
+                        current.click();
+                    } else {
+                        var ev = document.createEvent('MouseEvents');
+                        ev.initEvent('click', true, true);
+                        current.dispatchEvent(ev);
+                    }
                     return;
             }
 

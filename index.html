@@ -40,9 +40,18 @@
         
         <!-- Fullscreen Player -->
         <div id="player-container" class="player-container hidden">
-            <video id="video-player" controls class="video-player"></video>
-            <div class="player-controls">
-                <button class="focusable btn-close-player">Close</button>
+            <video id="video-player" class="video-player" autoplay></video>
+            <div id="custom-controls" class="custom-controls">
+                <div class="progress-container">
+                    <div id="progress-bar" class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                </div>
+                <div class="controls-row">
+                    <button class="focusable btn-player btn-play-pause" id="btn-play-pause">&#9209;</button>
+                    <span id="time-display" class="time-display">00:00 / 00:00</span>
+                    <button class="focusable btn-player btn-close-player" id="btn-close-player">Close</button>
+                </div>
             </div>
         </div>
     </div>
