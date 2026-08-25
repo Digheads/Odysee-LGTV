@@ -1,6 +1,6 @@
 {
     "id": "com.odysee.lgtv",
-    "version": "1.0.90",
+    "version": "1.0.92",
     "vendor": "Odysee",
     "type": "web",
     "main": "index.html",
