@@ -2,12 +2,10 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <!-- Prevent caching -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Odysee TV</title>
-    <!-- Use a dynamic version to bust cache -->
     <script>
         document.write('<link rel="stylesheet" href="css/main.css?v=' + Date.now() + '">');
     </script>
@@ -30,6 +28,10 @@
         <main id="main-content" class="main-content">
             <header class="top-header">
                 <h1 id="page-title">Home</h1>
+                <div id="search-container" style="display: none; margin-top: 20px; display: flex; gap: 20px;">
+                    <input type="text" id="search-input" class="focusable search-input" placeholder="Keresés..." style="flex: 1; padding: 15px; font-size: 24px; border-radius: 12px; border: 2px solid transparent; background: #2A2D35; color: white;" />
+                    <button id="btn-search" class="focusable btn-search" style="padding: 15px 40px; font-size: 24px; border-radius: 12px; background: #E2225E; color: white; border: 2px solid transparent; cursor: pointer;">Keresés</button>
+                </div>
             </header>
             
             <div id="video-grid" class="video-grid">
@@ -40,8 +42,13 @@
         
         <!-- Fullscreen Player -->
         <div id="player-container" class="player-container hidden">
+            <div id="player-title" class="player-title"></div>
+            <div id="player-loading" class="player-loading"></div>
             <video id="video-player" class="video-player" autoplay></video>
             <div id="custom-controls" class="custom-controls">
+                <div class="time-container">
+                    <span id="time-display" class="time-display">00:00:00 / 00:00:00</span>
+                </div>
                 <div class="progress-container">
                     <div id="progress-bar" class="progress-bar">
                         <div id="progress-fill" class="progress-fill"></div>
@@ -49,14 +56,14 @@
                 </div>
                 <div class="controls-row">
                     <button class="focusable btn-player btn-play-pause" id="btn-play-pause">&#9632;</button>
-                    <span id="time-display" class="time-display">00:00 / 00:00</span>
                 </div>
             </div>
         </div>
     </div>
+    
     <!-- On-Screen Debug Console -->
     <div id="debug-console" style="position: absolute; top: 10px; right: 10px; width: 600px; height: 800px; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 14px; z-index: 9999; padding: 10px; overflow-y: auto; border: 1px solid #0f0; pointer-events: none;">
-        <div>DEBUG CONSOLE v1.0.52</div>
+        <div>DEBUG CONSOLE v1.0.73</div>
     </div>
     
     <script src="js/api.js"></script>
