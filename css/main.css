@@ -166,6 +166,7 @@ body {
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.4;
+    height: 51px; /* Force exactly 2 lines height to prevent float snags */
     color: #e5e7eb;
 }
 

@@ -71,6 +71,7 @@ function closePlayer() {
     var videoPlayer = document.getElementById('video-player');
 
     videoPlayer.pause();
+    videoPlayer.onerror = null; // Prevent src='' from triggering an error loop
     videoPlayer.innerHTML = '';
     videoPlayer.src = '';
     playerContainer.classList.add('hidden');
@@ -97,7 +98,10 @@ function loadTrending() {
 
         if (result && result.items) {
             for (var i = 0; i < result.items.length; i++) {
-                grid.appendChild(createVideoCard(result.items[i]));
+                var card = createVideoCard(result.items[i]);
+                if (card) {
+                    grid.appendChild(card);
+                }
             }
         }
 
@@ -157,21 +161,23 @@ function playVideo(item) {
     videoPlayer.innerHTML = '';
     videoPlayer.src = '';
 
-    // HLS is required for audio (Odysee transcodes audio to AAC in HLS).
-    // Native player rejects original Odysee URL and blob: URLs.
+    // The user's browser is playing the HLS stream (which is why they see .ts chunks).
+    // Native WebOS 2.0 rejects Odysee's HLS because it's Version 6.
     // hls.js crashes the hardware decoder ("media source closed").
-    // We will attempt to fetch the m3u8 via AJAX, clean it up (downgrade to Version 3, absolute URLs),
-    // and feed it to the native player using a data: URI.
+    // The ONLY way to play this natively with sound is to fetch the m3u8, rewrite it to Version 3,
+    // and feed it via a data: URI.
     
-    var baseUrl = 'http://player.odycdn.com/v6/streams/' + claimId + '/' + (sdHash ? sdHash.substring(0, 6) : '');
-    var m3u8Url = baseUrl + '/v1.m3u8'; // Target 720p to be safe
+    // CRITICAL: HLS uses the FULL sdHash, not the 6-character short hash!
+    var hlsBaseUrl = 'http://player.odycdn.com/v6/streams/' + claimId + '/' + sdHash;
+    var m3u8Url = hlsBaseUrl + '/v1.m3u8'; // Target 720p for stability
     
     if (!sdHash) {
-        console.error("No sd_hash, cannot construct HLS URL!");
+        console.error("No sd_hash, falling back to raw download.");
+        playDirectUrl('http://odysee.com/$/download/' + encodeURIComponent(name) + '/' + claimId);
         return;
     }
     
-    console.log("Fetching M3U8 for data URI rewrite: " + m3u8Url);
+    console.log("Fetching HLS playlist: " + m3u8Url);
     
     var xhr = new XMLHttpRequest();
     xhr.open('GET', m3u8Url, true);
@@ -184,16 +190,16 @@ function playVideo(item) {
                     var line = lines[i].trim();
                     if (!line) continue;
                     
-                    // Downgrade version and remove unsupported tags
+                    // Downgrade to Version 3
                     if (line.indexOf('#EXT-X-VERSION:') === 0) {
                         newLines.push('#EXT-X-VERSION:3');
                     }
                     else if (line.indexOf('#EXT-X-INDEPENDENT-SEGMENTS') === 0) {
-                        // Skip this tag
+                        // Skip unsupported tag
                     }
                     else if (line.indexOf('.ts') !== -1 && line.indexOf('http') !== 0) {
-                        // Rewrite relative TS chunks to absolute HTTP URLs
-                        newLines.push(baseUrl + '/' + line);
+                        // Absolute URLs for chunks
+                        newLines.push(hlsBaseUrl + '/' + line);
                     }
                     else {
                         newLines.push(line);
@@ -201,33 +207,39 @@ function playVideo(item) {
                 }
                 
                 var cleanM3u8 = newLines.join('\n');
-                console.log("Clean M3U8 created, length: " + cleanM3u8.length);
-                
-                // Base64 encode the playlist for data URI
                 var base64M3u8 = btoa(unescape(encodeURIComponent(cleanM3u8)));
                 var dataUri = 'data:application/vnd.apple.mpegurl;base64,' + base64M3u8;
                 
-                videoPlayer.innerHTML = '';
-                videoPlayer.src = dataUri;
-                playerContainer.classList.remove('hidden');
-                videoPlayer.volume = 1.0;
-                videoPlayer.muted = false;
-                
-                videoPlayer.onerror = function() {
-                    console.error("Native Video Error Code with Data URI:", videoPlayer.error ? videoPlayer.error.code : "unknown");
-                };
-                
-                videoPlayer.load();
-                var p = videoPlayer.play();
-                if (p && typeof p.catch === 'function') {
-                    p.catch(function(e) { console.error("Play error:", e); });
-                }
+                playDirectUrl(dataUri);
             } else {
-                console.error("Failed to fetch M3U8. Status: " + xhr.status);
+                console.error("Failed to fetch M3U8, trying direct MP4...");
+                // If HLS fetch fails, try the short-hash MP4 as a backup
+                var shortHash = sdHash.substring(0, 6);
+                playDirectUrl('http://player.odycdn.com/v6/streams/' + claimId + '/' + shortHash + '.mp4');
             }
         }
     };
     xhr.send();
+    
+    function playDirectUrl(url) {
+        console.log("Playing URL: " + url.substring(0, 50) + "...");
+        videoPlayer.onerror = null;
+        videoPlayer.innerHTML = '';
+        videoPlayer.src = url;
+        playerContainer.classList.remove('hidden');
+        videoPlayer.volume = 1.0;
+        videoPlayer.muted = false;
+        
+        videoPlayer.onerror = function() {
+            console.error("Native Video Error Code:", videoPlayer.error ? videoPlayer.error.code : "unknown");
+        };
+        
+        videoPlayer.load();
+        var p = videoPlayer.play();
+        if (p && typeof p.catch === 'function') {
+            p.catch(function(e) { console.error("Play error:", e); });
+        }
+    }
 
     // Push state AFTER play to avoid dropping the user gesture token in old WebKit
     history.pushState({ playerOpen: true }, "player");
