@@ -41,8 +41,16 @@ function loadTrending() {
     grid.innerHTML = '';
     loading.style.display = 'block';
 
-    OdyseeAPI.getTrending().then(function(result) {
+    OdyseeAPI.getTrending(function(err, result) {
         loading.style.display = 'none';
+        
+        if (err) {
+            grid.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content.</div>';
+            console.error(err);
+            SpatialNavigation.init();
+            return;
+        }
+
         var items = result.items || [];
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
@@ -53,11 +61,6 @@ function loadTrending() {
         }
         
         // Initialize or refresh navigation after adding elements
-        SpatialNavigation.init();
-    }).catch(function(err) {
-        loading.style.display = 'none';
-        grid.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content.</div>';
-        console.error(err);
         SpatialNavigation.init();
     });
 }
