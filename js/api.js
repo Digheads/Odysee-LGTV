@@ -1,6 +1,8 @@
 // js/api.js
 var OdyseeAPI = (function() {
-    var BASE_URL = 'https://api.na-backend.odysee.com/api/v1/proxy';
+    // Use local proxy for Emulator testing to bypass SSL issues.
+    // Revert this to 'https://api.na-backend.odysee.com/api/v1/proxy' for production!
+    var BASE_URL = 'http://192.168.56.1:3000';
 
     function request(method, params, callback) {
         var xhr = new XMLHttpRequest();

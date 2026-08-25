@@ -45,7 +45,8 @@ function loadTrending() {
         loading.style.display = 'none';
         
         if (err) {
-            grid.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content.</div>';
+            var errorMsg = err.message || (typeof err === 'string' ? err : JSON.stringify(err));
+            grid.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. Error: ' + errorMsg + '</div>';
             console.error(err);
             SpatialNavigation.init();
             return;
