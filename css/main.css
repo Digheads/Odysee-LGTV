@@ -1,15 +1,15 @@
 /* css/main.css */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-    --bg-color: #0F1115;
-    --sidebar-bg: rgba(15, 17, 21, 0.85);
+    --bg-color: #000000;
+    --sidebar-bg: #121212;
     --text-primary: #FFFFFF;
-    --text-secondary: #A0AAB5;
-    --primary-color: #E2145A;
-    --primary-gradient: linear-gradient(135deg, #E2145A 0%, #FF3366 100%);
-    --card-bg: #1A1D24;
-    --focus-ring: rgba(226, 20, 90, 0.6);
+    --text-secondary: #9CA3AF;
+    --primary-color: #E2225E;
+    --primary-gradient: linear-gradient(135deg, #E2225E 0%, #FF4B72 100%);
+    --card-bg: transparent;
+    --focus-ring: #E2225E;
 }
 
 * {
@@ -19,7 +19,7 @@
 }
 
 body {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Inter', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-primary);
     overflow: hidden; /* TV apps usually don't have body scroll */
@@ -28,7 +28,6 @@ body {
 }
 
 .app-container {
-    display: flex;
     width: 100%;
     height: 100%;
     position: relative;
@@ -36,12 +35,14 @@ body {
 
 /* Sidebar */
 .sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
     width: 320px;
+    height: 1080px;
     background: var(--sidebar-bg);
     border-right: 1px solid rgba(255,255,255,0.05);
     padding: 60px 0;
-    display: flex;
-    flex-direction: column;
     z-index: 10;
 }
 
@@ -84,9 +85,11 @@ body {
 
 /* Main Content */
 .main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+    position: absolute;
+    left: 320px;
+    top: 0;
+    width: 1600px;
+    height: 1080px;
     padding: 60px;
     overflow-y: hidden;
 }
@@ -102,13 +105,18 @@ body {
 }
 
 .video-grid {
-    display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
+    display: block;
+    width: 100%;
     overflow-y: auto;
     padding-bottom: 60px;
     padding-right: 20px;
     flex: 1;
+}
+
+.video-grid::after {
+    content: "";
+    display: table;
+    clear: both;
 }
 
 /* Hide scrollbar for TV */
@@ -117,16 +125,15 @@ body {
 }
 
 .video-card {
-    width: calc(25% - 22.5px); /* 30px margin * 3 / 4 */
-    margin-right: 30px;
-    margin-bottom: 30px;
+    float: left;
+    width: 23%;
+    margin-right: 2.66%;
+    margin-bottom: 40px;
     background: var(--card-bg);
-    border-radius: 16px;
+    border-radius: 12px;
     overflow: hidden;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: all 0.3s ease;
     border: 3px solid transparent;
-    display: flex;
-    flex-direction: column;
 }
 
 .video-card:nth-child(4n) {
@@ -137,6 +144,8 @@ body {
     width: 100%;
     position: relative;
     padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 .video-card .thumbnail {
@@ -148,37 +157,40 @@ body {
     background-size: cover;
     background-position: center;
     background-color: #2A2D35;
+    border-radius: 12px;
 }
 
 .video-card .info {
-    padding: 20px;
+    padding: 12px 0;
     flex: 1;
     display: flex;
     flex-direction: column;
 }
 
 .video-card .title {
-    font-size: 22px;
-    font-weight: 600;
-    margin-bottom: 10px;
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 6px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    line-height: 1.3;
+    line-height: 1.4;
+    color: #e5e7eb;
 }
 
 .video-card .channel {
-    font-size: 18px;
+    font-size: 15px;
     color: var(--text-secondary);
     margin-top: auto;
 }
 
 .video-card.focused {
-    transform: scale(1.08);
+    transform: scale(1.05);
     border-color: var(--primary-color);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 20px var(--focus-ring);
+    box-shadow: 0 10px 30px rgba(226, 34, 94, 0.2);
     z-index: 2;
+    background: #1a1a1a;
 }
 
 .loading-spinner {

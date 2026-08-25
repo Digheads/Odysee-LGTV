@@ -1,8 +1,13 @@
 // js/api.js
 var OdyseeAPI = (function () {
-    // Use local proxy for Emulator testing to bypass SSL issues.
-    // Revert this to 'https://api.na-backend.odysee.com/api/v1/proxy' for production!
-    var BASE_URL = 'http://10.0.2.2:3000';
+    // CONFIGURATION:
+    // Set to true for Emulator testing (uses local proxy to bypass SSL issues).
+    // Set to false before running 'ares-package' for the physical LG TV!
+    var USE_EMULATOR_PROXY = true;
+
+    var BASE_URL = USE_EMULATOR_PROXY 
+        ? 'http://10.0.2.2:3000' 
+        : 'https://api.na-backend.odysee.com/api/v1/proxy';
 
     function request(method, params, callback) {
         console.log('OdyseeAPI: Starting request to ' + BASE_URL);
@@ -43,6 +48,7 @@ var OdyseeAPI = (function () {
     }
 
     return {
+        isProxyEnabled: USE_EMULATOR_PROXY,
         getTrending: function (callback) {
             request('claim_search', {
                 any_tags: ["trending"],

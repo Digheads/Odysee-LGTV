@@ -70,7 +70,15 @@ function createVideoCard(item) {
     if (!item.value) return null;
     
     var title = item.value.title || 'Untitled';
-    var thumbnail = item.value.thumbnail ? item.value.thumbnail.url : '';
+    var originalThumbnail = item.value.thumbnail ? item.value.thumbnail.url : '';
+    
+    // Automatically switch between Proxy and Direct based on the toggle in api.js
+    var thumbnail = originalThumbnail;
+    if (OdyseeAPI.isProxyEnabled && originalThumbnail) {
+        // Added cb (cache buster) to force emulator to re-download if it cached the broken images
+        thumbnail = 'http://10.0.2.2:3000/image?url=' + encodeURIComponent(originalThumbnail) + '&cb=' + Date.now();
+    }
+    
     var channelName = item.signing_channel && item.signing_channel.value ? item.signing_channel.value.title : 'Unknown';
 
     var card = document.createElement('div');
@@ -96,6 +104,10 @@ function playVideo(item) {
     var claimId = item.claim_id;
     // Odysee direct streaming URL format
     var streamUrl = 'https://odysee.com/$/download/' + name + '/' + claimId;
+
+    if (OdyseeAPI && OdyseeAPI.isProxyEnabled) {
+        streamUrl = 'http://10.0.2.2:3000/video?url=' + encodeURIComponent(streamUrl);
+    }
 
     var playerContainer = document.getElementById('player-container');
     var videoPlayer = document.getElementById('video-player');

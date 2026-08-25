@@ -41,7 +41,12 @@ var SpatialNavigation = (function() {
             // Handle scrolling nicely
             var el = focusableElements[currentFocusedIndex];
             if (el.classList.contains('video-card')) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                var container = document.getElementById('main-content');
+                if (container) {
+                    var targetScroll = el.offsetTop - 150;
+                    if (targetScroll < 0) targetScroll = 0;
+                    container.scrollTop = targetScroll;
+                }
             }
         }
     }
