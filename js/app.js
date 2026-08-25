@@ -67,7 +67,7 @@ function loadTrending() {
 }
 
 function createVideoCard(item) {
-    if (!item.value || !item.value.stream) return null;
+    if (!item.value) return null;
     
     var title = item.value.title || 'Untitled';
     var thumbnail = item.value.thumbnail ? item.value.thumbnail.url : '';

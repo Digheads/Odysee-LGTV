@@ -1,15 +1,21 @@
 // js/api.js
-var OdyseeAPI = (function() {
+var OdyseeAPI = (function () {
     // Use local proxy for Emulator testing to bypass SSL issues.
     // Revert this to 'https://api.na-backend.odysee.com/api/v1/proxy' for production!
-    var BASE_URL = 'http://192.168.56.1:3000';
+    var BASE_URL = 'http://10.0.2.2:3000';
 
     function request(method, params, callback) {
+        console.log('OdyseeAPI: Starting request to ' + BASE_URL);
         var xhr = new XMLHttpRequest();
         xhr.open('POST', BASE_URL, true);
         xhr.setRequestHeader('Content-Type', 'application/json-rpc');
         
-        xhr.onreadystatechange = function() {
+        xhr.timeout = 5000; // 5 seconds timeout
+        xhr.ontimeout = function () {
+            callback(new Error('Timeout: Nem érem el a ' + BASE_URL + ' címet az emulátorból!'));
+        };
+
+        xhr.onreadystatechange = function () {
             if (xhr.readyState === 4) {
                 if (xhr.status === 200) {
                     try {
@@ -27,7 +33,7 @@ var OdyseeAPI = (function() {
                 }
             }
         };
-        
+
         xhr.send(JSON.stringify({
             method: method,
             params: params,
@@ -37,7 +43,7 @@ var OdyseeAPI = (function() {
     }
 
     return {
-        getTrending: function(callback) {
+        getTrending: function (callback) {
             request('claim_search', {
                 any_tags: ["trending"],
                 fee_amount: "<=0",

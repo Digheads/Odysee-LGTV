@@ -5,6 +5,8 @@ const PORT = 3000;
 const TARGET_URL = 'https://api.na-backend.odysee.com/api/v1/proxy';
 
 const server = http.createServer((req, res) => {
+    console.log(`[${new Date().toLocaleTimeString()}] Incoming ${req.method} request to proxy...`);
+    
     // Enable CORS for the emulator
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -20,6 +22,13 @@ const server = http.createServer((req, res) => {
         let body = '';
         req.on('data', chunk => body += chunk.toString());
         req.on('end', () => {
+            try {
+                const jsonBody = JSON.parse(body);
+                console.log(`[➔] Odysee Method: ${jsonBody.method}`);
+            } catch (e) {
+                console.log(`[➔] Body length: ${body.length} bytes`);
+            }
+
             const options = {
                 method: 'POST',
                 headers: {
@@ -29,12 +38,13 @@ const server = http.createServer((req, res) => {
             };
 
             const proxyReq = https.request(TARGET_URL, options, (proxyRes) => {
+                console.log(`[✔] Response from Odysee: ${proxyRes.statusCode}`);
                 res.writeHead(proxyRes.statusCode, proxyRes.headers);
                 proxyRes.pipe(res, { end: true });
             });
 
             proxyReq.on('error', (e) => {
-                console.error(`Proxy error: ${e.message}`);
+                console.error(`[✘] Proxy error: ${e.message}`);
                 res.writeHead(500);
                 res.end(JSON.stringify({ error: 'Proxy error' }));
             });

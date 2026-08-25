@@ -102,9 +102,9 @@ body {
 }
 
 .video-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
     overflow-y: auto;
     padding-bottom: 60px;
     padding-right: 20px;
@@ -117,6 +117,9 @@ body {
 }
 
 .video-card {
+    width: calc(25% - 22.5px); /* 30px margin * 3 / 4 */
+    margin-right: 30px;
+    margin-bottom: 30px;
     background: var(--card-bg);
     border-radius: 16px;
     overflow: hidden;
@@ -124,6 +127,10 @@ body {
     border: 3px solid transparent;
     display: flex;
     flex-direction: column;
+}
+
+.video-card:nth-child(4n) {
+    margin-right: 0;
 }
 
 .video-card .thumbnail-wrapper {
