@@ -13,6 +13,9 @@ var SpatialNavigation = function () {
         if (t >= 0 && e[t] && e[t].classList.remove("focused"), e[t = a]) {
             e[t].classList.add("focused");
             var n = e[t];
+            if (document.activeElement && document.activeElement.tagName === "INPUT" && document.activeElement !== n) {
+                document.activeElement.blur();
+            }
             if (n.classList.contains("nav-item")) {
                 var p = n.parentNode;
                 if (p && p.scrollHeight > p.clientHeight) {
@@ -78,6 +81,10 @@ var SpatialNavigation = function () {
                                 l.cy > o.cy && Math.abs(h) <= Math.abs(d) && (v = !0);
                                 break;
                             case 13:
+                                if (i.tagName === "INPUT") {
+                                    i.focus();
+                                    return;
+                                }
                                 if ("function" == typeof i.click) i.click();
                                 else {
                                     var b = document.createEvent("MouseEvents");
