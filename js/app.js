@@ -1067,7 +1067,8 @@ function playVideo(e) {
     var c = document.getElementById("player-loading"),
         watchdogTimer = null,
         lastTime = 0,
-        stuckCount = 0;
+        stuckCount = 0,
+        isBufferingAllowed = true;
 
     function u(e, total) {
         if (isNaN(e)) return "00:00";
@@ -1084,7 +1085,12 @@ function playVideo(e) {
     n.addEventListener("waiting", (function () {
         c.style.display = "block"
     })), n.addEventListener("seeking", (function () {
-        c.style.display = "block"
+        c.style.display = "block";
+        // WebOS fires "seeking" when the network stalls. We only want to allow 
+        // long buffering (isBufferingAllowed=true) if it's a REAL user seek.
+        if (Math.abs(n.currentTime - lastTime) > 1) {
+            isBufferingAllowed = true;
+        }
     })), n.addEventListener("seeked", (function () {
         c.style.display = "none"
     })), n.addEventListener("playing", (function () {
@@ -1092,48 +1098,51 @@ function playVideo(e) {
         if (watchdogTimer) clearInterval(watchdogTimer);
         lastTime = n.currentTime;
         stuckCount = 0;
-        var isBufferingAllowed = true; // initially true for startup
-        n.addEventListener("seeking", function() { isBufferingAllowed = true; });
+        isBufferingAllowed = true; // initially true for startup
         watchdogTimer = setInterval(function() {
-            if (!n.paused && !n.ended) {
-                if (n.seeking) {
-                    stuckCount = 0;
-                    lastTime = n.currentTime;
-                    return;
-                }
-                var current = n.currentTime;
-                if (Math.abs(current - lastTime) < 0.1) {
-                    stuckCount++;
-                    var limit = isBufferingAllowed ? 60 : 4; // 30s for seek/start, 2s for normal playback
-                    if (stuckCount >= limit) {
-                        console.log("Watchdog: video stalled for " + (limit/2) + " seconds, auto-reconnecting!");
-                        var raw = n.dataset.rawUrl;
-                        var useM = n.dataset.useMagic === "true";
-                        if (raw) {
-                            var newUrl = buildPlayableUrl(raw, useM);
-                            console.log("Watchdog: fresh URL -> " + newUrl);
-                            var savedTime = n.currentTime;
-                            isBufferingAllowed = true;
-                            n.pause();
-                            setSources(n, [{ url: newUrl, type: "video/mp4" }]);
-                            n.load();
-                            var onReady = function() {
-                                try { n.currentTime = savedTime; } catch(e) {}
-                                n.play();
-                                n.removeEventListener("canplay", onReady);
-                            };
-                            n.addEventListener("canplay", onReady);
-                        } else {
-                            n.pause();
-                            n.play();
-                        }
+            try {
+                if (!n.paused && !n.ended) {
+                    if (n.seeking) {
                         stuckCount = 0;
+                        lastTime = n.currentTime;
+                        return;
                     }
-                } else {
-                    stuckCount = 0;
-                    lastTime = current;
-                    isBufferingAllowed = false; // it is progressing, so future stalls are unexpected
+                    var current = n.currentTime;
+                    if (Math.abs(current - lastTime) < 0.1) {
+                        stuckCount++;
+                        var limit = isBufferingAllowed ? 60 : 2; // 30s for real seek, 1s for normal playback stall
+                        if (stuckCount >= limit) {
+                            console.log("Watchdog: video stalled for " + (limit/2) + " seconds, auto-reconnecting!");
+                            var raw = n.dataset.rawUrl;
+                            var useM = n.dataset.useMagic === "true";
+                            if (raw) {
+                                var newUrl = buildPlayableUrl(raw, useM);
+                                console.log("Watchdog: fresh URL -> " + newUrl);
+                                var savedTime = n.currentTime;
+                                isBufferingAllowed = true;
+                                n.pause();
+                                setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                                n.load();
+                                var onReady = function() {
+                                    try { n.currentTime = savedTime; } catch(e) {}
+                                    n.play();
+                                    n.removeEventListener("canplay", onReady);
+                                };
+                                n.addEventListener("canplay", onReady);
+                            } else {
+                                n.pause();
+                                n.play();
+                            }
+                            stuckCount = 0;
+                        }
+                    } else {
+                        stuckCount = 0;
+                        lastTime = current;
+                        isBufferingAllowed = false; // it is progressing, so future stalls are unexpected
+                    }
                 }
+            } catch(e) {
+                // Ignore DOM Exception 11 if the video object gets into an invalid state temporarily
             }
         }, 500);
     })), n.addEventListener("canplay", (function () {
@@ -1149,6 +1158,33 @@ function playVideo(e) {
     })), n.addEventListener("error", (function () {
         c.style.display = "none"
     })), n.addEventListener("ended", (function () {
+        var e = n.currentTime || 0,
+            t = n.duration,
+            i = parseFloat(n.getAttribute("data-duration")) || 0;
+        t && !isNaN(t) && t !== 1 / 0 || (t = i);
+
+        if (t > 0 && (t - e) > 5) {
+            console.log("Premature end detected (" + e + " / " + t + "). Auto-reconnecting...");
+            var raw = n.dataset.rawUrl;
+            var useM = n.dataset.useMagic === "true";
+            if (raw) {
+                var newUrl = buildPlayableUrl(raw, useM);
+                console.log("Watchdog (EOF): fresh URL -> " + newUrl);
+                var savedTime = n.currentTime;
+                isBufferingAllowed = true;
+                n.pause();
+                setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                n.load();
+                var onReady = function() {
+                    try { n.currentTime = savedTime; } catch(err) {}
+                    n.play();
+                    n.removeEventListener("canplay", onReady);
+                };
+                n.addEventListener("canplay", onReady);
+            }
+            return;
+        }
+
         if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
         closePlayer()
     })), n.addEventListener("timeupdate", (function () {
