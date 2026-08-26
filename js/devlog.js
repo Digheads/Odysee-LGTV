@@ -1,13 +1,13 @@
-// Tavoli naplozas a fejlesztoi szervernek (devserver.js).
-// Elesitesnel eleg az index.html-bol kivenni a <script src="js/devlog.js"> sort:
-// a RemoteLog.push() hivas az app.js-ben ilyenkor no-op lesz.
+// Remote logging to the development server (devserver.js).
+// For production, just remove the <script src="js/devlog.js"> line from index.html:
+// the RemoteLog.push() calls in app.js will become no-ops.
 //
-// A cimzett meghatarozasa:
-//   1. window.DEVLOG_HOST ("192.168.1.50:3000") -- ha file://-bol indul az app
-//   2. kulonben a betoltes helye, ha http(s)
+// Determining the target:
+//   1. window.DEVLOG_HOST ("192.168.1.50:3000") -- if the app is launched from file://
+//   2. otherwise, the load origin, if http(s)
 //
-// ES5, XHR. A body szandekosan text/plain: az CORS "simple request", tehat nincs
-// preflight -- a regi WebKit-en igy megbizhatobb, es feleannyi keres.
+// ES5, XHR. The body is intentionally text/plain: it's a CORS "simple request", so there is no
+// preflight -- it's more reliable on old WebKit, and half as many requests.
 
 var RemoteLog = (function () {
     var queue = [],
@@ -43,7 +43,7 @@ var RemoteLog = (function () {
             xhr = new XMLHttpRequest();
         try {
             xhr.open("POST", url, true);
-            // text/plain -> simple request, nincs CORS preflight
+            // text/plain -> simple request, no CORS preflight
             xhr.setRequestHeader("Content-Type", "text/plain");
             xhr.timeout = 8000;
             xhr.onreadystatechange = function () {
@@ -69,7 +69,7 @@ var RemoteLog = (function () {
         push: function (level, msg) {
             if (failures >= MAX_FAILURES) return;
             queue.push({ level: level, msg: String(msg) });
-            // Hiba eseten azonnal kuldunk: ha az app menten elszall, ne vesszen el.
+            // Send immediately on error: if the app crashes instantly, we don't want to lose it.
             if ("error" === level || queue.length >= MAX_QUEUE) {
                 if (null !== timer) {
                     clearTimeout(timer);
@@ -79,10 +79,10 @@ var RemoteLog = (function () {
             } else schedule();
         },
 
-        // Kezi hivasra: megmondja, hova megy a log (vagy hogy sehova).
+        // For manual inspection: returns where the log goes (or if it doesn't).
         status: function () {
             var url = resolveEndpoint();
-            return url ? ("RemoteLog -> " + url) : "RemoteLog: nincs cimzett (allitsd be a window.DEVLOG_HOST-ot)";
+            return url ? ("RemoteLog -> " + url) : "RemoteLog: no target (set window.DEVLOG_HOST)";
         }
     };
 })();

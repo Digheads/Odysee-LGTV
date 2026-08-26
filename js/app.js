@@ -1,20 +1,20 @@
 // ---------------------------------------------------------------------------
-// Segedfuggvenyek
+// Helper functions
 // ---------------------------------------------------------------------------
 
-// A WebKit 538.2 (webOS 2.0) csak a -webkit-flex alakot ismeri; az unprefixed
-// "flex" ertek ott ervenytelen, es a hozzarendeles csendben elveszik. Eloszor a
-// prefixeltet allitjuk, majd az unprefixedet -- modern motoron az utobbi nyer,
-// regin viszont ervenytelen, ezert marad a -webkit-flex.
+// WebKit 538.2 (webOS 2.0) only supports -webkit-flex; the unprefixed
+// "flex" value is invalid and the assignment is silently ignored. We set the
+// prefixed version first, then the unprefixed one -- on modern engines the latter wins,
+// but on older ones it is invalid, so it falls back to -webkit-flex.
 function setDisplayFlex(el) {
     el.style.display = "-webkit-flex";
     el.style.display = "flex";
 }
 
 // ---------------------------------------------------------------------------
-// Diagnosztika: mi erkezik valojaban?
-// A <video> csak egy hibakodot ad, arrol semmit, hogy a szerver mit kuldott.
-// Ez a proba lekeri az elso 1 KB-ot es megmondja, media-e egyaltalan.
+// Diagnostics: what is actually arriving?
+// The <video> element only gives an error code, nothing about what the server sent.
+// This probe fetches the first 1 KB and tells if it is media at all.
 // ---------------------------------------------------------------------------
 
 function sniffFormat(t) {
@@ -33,9 +33,9 @@ function sniffFormat(t) {
     return "ismeretlen binaris tartalom";
 }
 
-// Az mp4 kodek-azonositoi (fourcc) a moov boxban vannak. A webOS 2.0 tamogatasa:
-// H.264 HP@L4.2 es H.265 Main/Main10@L4.1 igen; AV1 semmilyen; VP9 csak UHD
-// modellen; hangbol AAC/MP3/Dolby/DTS igen, Opus es FLAC nem.
+// MP4 codec identifiers (fourcc) are in the moov box. webOS 2.0 support:
+// H.264 HP@L4.2 and H.265 Main/Main10@L4.1 yes; AV1 none; VP9 only on UHD
+// models; audio AAC/MP3/Dolby/DTS yes, Opus and FLAC no.
 var MP4_CODECS = [
     ["avc1", "H.264/AVC - tamogatott"],
     ["avc3", "H.264/AVC - tamogatott"],
@@ -57,9 +57,9 @@ var MP4_CODECS = [
     ["dtsc", "DTS - tamogatott"]
 ];
 
-// H.264 profil- es szintkodok az avcC boxbol (AVCDecoderConfigurationRecord).
-// A webOS 2.0 maximuma: High Profile @ L4.2 (FHD). Ami e folott van, elbukik,
-// akkor is, ha maga a kodek "tamogatott".
+// H.264 profile and level codes from the avcC box (AVCDecoderConfigurationRecord).
+// webOS 2.0 maximum: High Profile @ L4.2 (FHD). Anything above this fails,
+// even if the codec itself is "supported".
 var H264_PROFILES = {
     66: "Baseline", 77: "Main", 88: "Extended", 100: "High",
     110: "High 10 (10 bit) -> NEM TAMOGATOTT", 122: "High 4:2:2 -> NEM TAMOGATOTT",
@@ -70,7 +70,7 @@ function u16(t, i) {
     return ((255 & t.charCodeAt(i)) << 8) | (255 & t.charCodeAt(i + 1));
 }
 
-// avcC: [size:4]["avcC":4][version:1][profil:1][kompat:1][szint:1]
+// avcC: [size:4]["avcC":4][version:1][profile:1][compat:1][level:1]
 function parseAvc(t) {
     var out = [],
         p = t.indexOf("avcC");
@@ -114,33 +114,33 @@ function fetchRange(url, range, cb) {
     x.send()
 }
 
-// A moov box (benne a kodek-leiro) lehet a fajl elejen (faststart) vagy a vegen.
-// Eloszor az elejet nezzuk; ha ott nincs talalat, a vegerol kerunk egy darabot.
+// The moov box (containing the codec descriptor) can be at the beginning of the file (faststart) or at the end.
+// We check the beginning first; if not found, we request a chunk from the end.
 // ---------------------------------------------------------------------------
-// HLS v6 -> v3 atiras
-// Az Odysee playlistjei #EXT-X-VERSION:6-ot deklaralnak, mert az ffmpeg
-// hls_flags=independent_segments beleteszi az #EXT-X-INDEPENDENT-SEGMENTS taget.
-// A webOS 2.0 viszont HLS v3-at tud, es a szabvany szerint a klienS NEM jatszhat
-// le magasabb verziojut. Maga a tartalom viszont v3-kepes: csak EXTINF,
-// TARGETDURATION, MEDIA-SEQUENCE, PLAYLIST-TYPE, ENDLIST es .ts szegmensek
-// vannak benne -- se EXT-X-MAP, se BYTERANGE. Ezert a playlistet letoltjuk,
-// atirjuk v3-ra, a szegmens-URL-eket abszolutta tesszuk, es blob/data URL-kent
-// adjuk a <video>-nak.
+// HLS v6 -> v3 translation
+// Odysee playlists declare #EXT-X-VERSION:6 because ffmpeg
+// hls_flags=independent_segments adds the #EXT-X-INDEPENDENT-SEGMENTS tag.
+// However, webOS 2.0 only supports HLS v3, and according to the standard, a client MUST NOT
+// play a higher version. The content itself is v3-capable: only EXTINF,
+// TARGETDURATION, MEDIA-SEQUENCE, PLAYLIST-TYPE, ENDLIST and .ts segments
+// are present -- no EXT-X-MAP, no BYTERANGE. Therefore, we download the playlist,
+// rewrite it to v3, make segment URLs absolute, and pass it to the <video>
+// as a blob/data URL.
 // ---------------------------------------------------------------------------
 
-// A HLS ezen a keszuleken proxy nelkul nem hasznalhato:
-//   - az Odysee playlistjei #EXT-X-VERSION:6-ot deklaralnak (az ffmpeg
-//     hls_flags=independent_segments miatt), a webOS 2.0 pedig HLS v3-at tud;
-//   - a v3-ra atirt playlist blob:file:/// URL-en elindul ugyan (a lejatszo
-//     elfogadja, nincs Error 4), de a szegmenseket nem tolti le, mert a media
-//     pipeline kulon folyamat es a blob: semat nem tudja feloldani;
-//   - szerveroldalon nincs mod v3-as playlistet kerni, a transcoder kimenete fix.
-// Ezert alapbol kihagyjuk a 308-as felderitest, es mindig az eredeti mp4 megy.
-// Igy a viselkedes determinisztikus, es egy felesleges korrel rovidebb.
+// HLS cannot be used on this device without a proxy:
+//   - Odysee playlists declare #EXT-X-VERSION:6 (due to ffmpeg
+//     hls_flags=independent_segments), and webOS 2.0 only supports HLS v3;
+//   - the v3-rewritten playlist starts on a blob:file:/// URL (the player
+//     accepts it, no Error 4), but does not download segments because the media
+//     pipeline is a separate process and cannot resolve the blob: scheme;
+//   - server-side there is no way to request a v3 playlist, transcoder output is fixed.
+// Therefore we skip the 308 discovery by default, and always use the original mp4.
+// This makes behavior deterministic and saves an unnecessary roundtrip.
 var PREFER_HLS = true;
 
-// Modul-szintu, hogy a closePlayer is torolhesse: kulonben a lejatszo bezarasa
-// utan is elsulne, es egy mar rejtett felulethez nyulna.
+// Module-level so closePlayer can clear it: otherwise it would fire
+// after the player is closed, modifying an already hidden UI.
 var stallTimer = null;
 
 function clearStall() {
@@ -150,11 +150,11 @@ function clearStall() {
     }
 }
 
-// A <video src="..."> semmilyen tipusjelzest nem ad a lejatszonak: az URL
-// kiterjesztesebol kell tippelnie. A Roku app ezzel szemben expliciten kozli
-// (streamFormat = "hls" / "mp4"). A webes megfeleloje a <source type="...">.
-// Ha tobb forrast adunk meg, a lejatszo maga valasztja az elsot, amit ert --
-// tehat a HLS/mp4 visszaesest sem nekunk kell kezelni.
+// The <video src="..."> provides no type hint to the player: it must guess
+// from the URL extension. The Roku app, in contrast, explicitly communicates this
+// (streamFormat = "hls" / "mp4"). Its web equivalent is <source type="...">.
+// If we provide multiple sources, the player chooses the first one it understands --
+// so we don't have to handle the HLS/mp4 fallback ourselves.
 function setSources(video, list) {
     video.removeAttribute("src");
     video.innerHTML = "";
@@ -179,7 +179,7 @@ function dirOf(u) {
 }
 
 function makeObjectUrl(text) {
-    // Blob URL-t preferalunk; ha nincs, data: URI a tartalek.
+    // Prefer Blob URL; if not available, fallback to data: URI.
     try {
         var U = window.URL || window.webkitURL;
         if (U && U.createObjectURL && "undefined" != typeof Blob) {
@@ -193,7 +193,7 @@ function makeObjectUrl(text) {
     return null;
 }
 
-// A master-bol kivalasztja a legjobb varianst, amit a keszulek meg elbir.
+// Selects the best variant from the master playlist that the device can handle.
 function pickVariant(master, maxHeight) {
     var lines = master.split(/\r?\n/),
         best = null;
@@ -255,9 +255,9 @@ function u16(t, i) {
     return ((255 & t.charCodeAt(i)) << 8) | (255 & t.charCodeAt(i + 1));
 }
 
-// A top-level boxokon vegigsetalva megkeresi a moov-ot. Azert kell rendes
-// bejarast csinalni, mert a nyers mdat-ban VELETLENUL is elofordulhat "avc1"
-// vagy "moov" bajtsorozat -- egy egyszeru indexOf hamis talalatot ad.
+// Iterates over the top-level boxes to find moov. A proper traversal is
+// required because the raw mdat can ACCIDENTALLY contain "avc1"
+// or "moov" byte sequences -- a simple indexOf gives false positives.
 function findMoov(t) {
     var off = 0;
     while (off + 8 <= t.length) {
@@ -265,7 +265,7 @@ function findMoov(t) {
             typ = t.substring(off + 4, off + 8);
         if (1 === sz) {
             if (off + 16 > t.length) return -1;
-            sz = u32(t, off + 12);   // a 64 bites meret also fele eleg
+            sz = u32(t, off + 12);   // the lower half of the 64-bit size is enough
         }
         if (sz < 8) return -1;
         if ("moov" === typ) return off;
@@ -274,7 +274,7 @@ function findMoov(t) {
     return -1;
 }
 
-// A moov-on belul: sav-tipusok, kodek-fourcc-k, H.264 profil/szint, felbontas.
+// Inside moov: track types, codec fourccs, H.264 profile/level, resolution.
 function parseMoov(t, base, label) {
     var names = {
         66: "Baseline", 77: "Main", 88: "Extended", 100: "High",
@@ -316,9 +316,9 @@ function parseMoov(t, base, label) {
                 var prof = 255 & t.charCodeAt(p + 5),
                     lev = 255 & t.charCodeAt(p + 7),
                     warn = "";
-                // webOS 2.0: FHD-n High @ L4.2 a maximum, L5.1 csak UHD modellen.
-                if (lev > 42 && width <= 1920) warn = "  <== L4.2 folott (FHD-n hatareset)";
-                if (prof > 100) warn += "  <== a High folotti profil nem tamogatott";
+                // webOS 2.0: High @ L4.2 is the maximum on FHD, L5.1 only on UHD models.
+                if (lev > 42 && width <= 1920) warn = "  <== Above L4.2 (borderline on FHD)";
+                if (prof > 100) warn += "  <== profiles above High are not supported";
                 console.log("[" + label + "]   profil: " + (names[prof] || prof) +
                     ", szint: L" + (lev / 10).toFixed(1) + warn);
             }
@@ -328,12 +328,12 @@ function parseMoov(t, base, label) {
     if (!found) console.log("[" + label + "] a moov-ban nem talaltam stsd-t");
 }
 
-// A moov lehet a fajl elejen (faststart) vagy a vegen. Eloszor az elejet nezzuk
-// rendes box-bejarassal; ha ott csak ftyp+mdat van, a vegerol kerunk egy darabot.
-// A konteneres elrendezes 64 bajtbol kiderul: az ftyp box merete utan allo box
-// tipusa megmondja, elol van-e a moov. Ha nincs (tehat mdat kovetkezik), akkor
-// a metaadat a fajl vegen van, es ez a media pipeline nagy fajloknal beleakad --
-// readyState=0-nal all meg, mert nem kuld range-kerest a vegere.
+// The moov can be at the beginning of the file (faststart) or at the end. We check the beginning first
+// with a proper box traversal; if only ftyp+mdat are there, we request a chunk from the end.
+// The container layout is revealed from 64 bytes: the box type following the ftyp box size
+// tells us if moov is at the front. If not (so mdat follows), then
+// the metadata is at the end of the file, which the media pipeline chokes on for large files --
+// it stalls at readyState=0 because it doesn't send a range request to the end.
 function checkFaststart(url, label) {
     fetchRange(url, "bytes=0-255", function (t, st) {
         if (t.length < 16) return;
@@ -341,8 +341,8 @@ function checkFaststart(url, label) {
             console.log("[" + label + "] a fajl nem ftyp-pal kezdodik (" + t.substring(4, 8) + ")");
             return
         }
-        // A ftyp utan allhat toltelek (free/skip/wide) is -- azokat atlepjuk,
-        // kulonben tevesen minositenenk "nem faststart"-nak egy ftyp/free/moov fajlt.
+        // There can be padding (free/skip/wide) after ftyp -- we skip those,
+// otherwise we would mistakenly classify an ftyp/free/moov file as "not faststart".
         var off = u32(t, 0),
             hop = 0;
         while (off + 8 <= t.length && hop < 8) {
@@ -389,8 +389,8 @@ function probeCodec(url, label) {
 function probeUrl(url, label) {
     var x = new XMLHttpRequest();
     x.open("GET", url, true);
-    // A regi WebKit-en ez a megbizhato mod nyers byte-ok olvasasara
-    // (a responseType="arraybuffer" nem mindenhol mukodik).
+    // On older WebKit this is the reliable way to read raw bytes
+// (responseType="arraybuffer" doesn't work everywhere).
     try {
         x.overrideMimeType("text/plain; charset=x-user-defined")
     } catch (err) { }
@@ -415,10 +415,10 @@ function probeUrl(url, label) {
         console.log("[" + label + "] byte: " + (hex || "(nincs)"));
         var verdict = sniffFormat(t);
         console.log("[" + label + "] >>> " + verdict);
-        // Ha a szallitas rendben volt es tenyleg media jott, akkor a baj a
-        // tartalomban van -> nezzuk meg, milyen kodek.
+        // If the transport was okay and media actually arrived, the problem is in
+// the content -> let's see what codec it is.
         if (0 === verdict.indexOf("MP4")) probeCodec(url, label);
-        // m3u8-nal a playlist eleje onmagaban is arulkodo (pl. EXT-X-VERSION)
+        // For m3u8, the start of the playlist is revealing by itself (e.g. EXT-X-VERSION)
         if (0 === t.indexOf("#EXTM3U"))
             console.log("[" + label + "] playlist: " + t.substring(0, 220).replace(/\n/g, " | "))
     };
@@ -433,11 +433,11 @@ function escapeHtml(s) {
         .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// A player.odycdn.com alapertelmezesben MINDEN kerest "flagged"-nek jelol es
-// 401-et ad, hacsak nem erkezik engedelyezett Referer/Origin/User-Agent
-// fejleccel. Egy <video> tag nem tud fejlecet kuldeni -- viszont a
-// ?magic=<unix_ts> query parameter 5 percig teljesen kikapcsolja ezt az
-// ellenorzest, es az URL resze, tehat a <video> is hasznalhatja.
+// player.odycdn.com by default marks ALL requests as "flagged" and
+// returns 401, unless an authorized Referer/Origin/User-Agent header arrives.
+// A <video> tag cannot send headers -- however, the
+// ?magic=<unix_ts> query parameter completely disables this check for 5 minutes,
+// and it's part of the URL, so the <video> can use it.
 function buildPlayableUrl(rawUrl, useMagic) {
     var u = rawUrl.replace(/^https:/i, "http:");
     u = u.replace(/([?&])magic=\d+/, "$1").replace(/[?&]$/, "");
@@ -445,21 +445,21 @@ function buildPlayableUrl(rawUrl, useMagic) {
     return u + (-1 === u.indexOf("?") ? "?" : "&") + "magic=" + OdyseeAPI.getServerNowSec();
 }
 
-// A webOS 2.0 web engine WebKit 538.2 -- nem tud WebP-t dekodolni. Ezen felul a
-// nyers thumbnailek nagy resze 1920x1080: 20 kartya ~101 MB dekodolt bitmap,
-// 400x225-re meretezve ~7 MB. A proxy tehat formatumot ES meretet is rendez,
-// ezert kell minden kepre. A forras formatuma amugy sem allapithato meg az
-// URL-bol: a thumbnails.lbry.com kiterjesztes es Content-Type nelkul ad
-// JPEG-et es WebP-et is ugyanarrol a hostrol.
+// The webOS 2.0 web engine is WebKit 538.2 -- it cannot decode WebP. Furthermore,
+// most raw thumbnails are 1920x1080: 20 cards would be ~101 MB decoded bitmap,
+// resized to 400x225 it's ~7 MB. The proxy thus fixes format AND size,
+// which is why we need it for every image. The source format cannot be determined
+// from the URL anyway: thumbnails.lbry.com serves both JPEG and WebP
+// from the same host without extension or Content-Type.
 function thumbUrl(u) {
     if (!u) return "";
     return "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&output=jpg&w=400";
 }
 
-// A vegtelen gorgetes soha nem engedte el a kartyakat. DOM-node-ot torolni nem
-// lehet (a .video-card:nth-child(4n) szabaly elcsuszna, es ugrana a gorgetes),
-// ezert csak a kepek src-jet dobjuk el a viewporttol tavol. A .thumbnail-wrapper
-// padding-bottom:56.25%-kal tartja a helyet, tehat a layout nem esik ossze.
+// Infinite scrolling never released the cards. DOM nodes cannot be deleted
+// (the .video-card:nth-child(4n) rule would shift, causing scroll jumps),
+// so we just drop the image src when far from the viewport. The .thumbnail-wrapper
+// holds the space with padding-bottom:56.25%, so the layout doesn't collapse.
 var IMG_KEEP_PX = 2500;
 
 function releaseOffscreenThumbs(scroller) {
@@ -499,7 +499,7 @@ function closePlayer() {
     }
 }
 
-// A menu dinamikusan epul a homepage API szekcioibol (Featured, Gaming, Tech...).
+// The menu is built dynamically from homepage API sections (Featured, Gaming, Tech...).
 var navSections = [];
 
 function sectionLabel(id) {
@@ -575,7 +575,7 @@ function loadPage(e) {
             a.focus()
         }), 100));
     }
-    
+
     if ("nav-login" === e) {
         isLoading = false;
         i.innerText = "Login";
@@ -703,8 +703,8 @@ function playVideo(e) {
 
     function handleMediaError(code, url) {
         clearStall();
-        // A magic-allapotot atvesszuk az URL-bol: ha az elozo forras magic-kel ment,
-        // a fallback is azzal kell menjen, kulonben a hotlink-vedelem 401-et ad.
+        // We inherit the magic state from the URL: if the previous source used magic,
+// the fallback must use it too, otherwise hotlink protection gives 401.
         var magicOn = -1 !== url.indexOf("magic=");
         var msg = {
             1: "Aborted (MEDIA_ERR_ABORTED).",
@@ -715,12 +715,12 @@ function playVideo(e) {
         console.error("Video error " + code + ": " + msg);
         o.style.display = "none";
 
-        // A 3-as/4-es kod jellemzoen formatum-problema. Ket forrasunk van, es ha az
-        // egyik nem megy, meg megprobalhatjuk a masikat:
-        //   HLS  -> EXT-X-VERSION:6-ot deklaral, a webOS 2.0 viszont HLS v3-at tud
-        //   mp4  -> a nyers feltoltes; a TV viszi a H.264 HP@L4.2-t es a H.265
-        //           Main/Main10@L4.1-et, de az AV1-et nem, a VP9-et csak UHD-n
-        // Ezert bukas eseten atvaltunk a masik forrasra, mielott feladnank.
+        // Error code 3/4 is typically a format problem. We have two sources, and if
+// one doesn't work, we can try the other:
+//   HLS  -> declares EXT-X-VERSION:6, but webOS 2.0 only supports HLS v3
+//   mp4  -> the raw upload; the TV supports H.264 HP@L4.2 and H.265
+//           Main/Main10@L4.1, but not AV1, and VP9 only on UHD
+// Therefore, on failure, we switch to the other source before giving up.
         if (3 === code || 4 === code) {
             if (!triedMp4 && -1 === url.indexOf("/v6/streams/")) {
                 var mp4 = OdyseeAPI.buildMp4Url(currentClaim);
@@ -738,17 +738,17 @@ function playVideo(e) {
                 }
             }
 
-            // Idaig jutva mindket forras elbukott.
+            // Reaching this point, both sources failed.
             probeUrl(url, "vegso-proba");
             if (hadHls) {
-                // Van kesz transcode, csak nem jatszhato (szinte biztosan a
-                // playlist EXT-X-VERSION:6-ja) -- uj transcode kerese nem segit.
+                // There is a ready transcode, but it's unplayable (almost certainly because of
+// the playlist's EXT-X-VERSION:6) -- requesting a new transcode won't help.
                 playerError.textContent = "Cannot start the video this time, please try again later.";
                 playerError.style.display = "block";
             } else {
-                // Nincs transcode: keressuk egyet. A HEAD felveszi a streamet a
-                // transcoder soraba (fitForTranscoder -> pool.Admit). A `common`
-                // queue MinHits-kuszobos, tehat egy keres lehet hogy keves.
+                // No transcode: request one. The HEAD request queues the stream into the
+// transcoder (fitForTranscoder -> pool.Admit). The `common` queue
+// has a MinHits threshold, so one request might not be enough.
                 playerError.textContent = "Cannot start the video this time, please try again later. Transcoding requested.";
                 playerError.style.display = "block";
                 var q = new XMLHttpRequest();
@@ -764,20 +764,20 @@ function playVideo(e) {
         }
     }
 
-    // A <video> nem jelez, ha egyszeruen nem indul el -- ilyenkor a lejatszo
-    // a vegtelensegig varna. 20 masodperc utan ugyanarra a fallback-lancra
-    // tereljuk, mint egy valodi hibat.
+    // The <video> doesn't signal if it simply doesn't start -- in this case the player
+// would wait infinitely. After 20 seconds, we route it to the same fallback chain
+// as a real error.
     function armStall(url) {
         clearStall();
         stallTimer = setTimeout(function () {
             stallTimer = null;
-            if (i.readyState >= 3) return;   // HAVE_FUTURE_DATA -> megis elindult
+            if (i.readyState >= 3) return;   // HAVE_FUTURE_DATA -> it started after all
             var rs = i.readyState;
             console.error("Did not start within 20s (readyState=" + rs + ")");
-            // readyState 0 = HAVE_NOTHING: a lejatszo meg a metaadatokig sem jutott.
-            // Ez NEM kodek-elutasitas -- akkor eloszor beolvasna a moov-ot es csak
-            // utana hibazna. A tipikus ok: a moov a fajl vegen van (nem faststart),
-            // es a pipeline nem kuld range-kerest a vegere.
+            // readyState 0 = HAVE_NOTHING: the player hasn't even reached metadata.
+// This is NOT a codec rejection -- it would read moov first and only
+// fail afterwards. The typical reason: moov is at the end of the file (not faststart),
+// and the pipeline doesn't send a range request to the end.
             stalledAtZero = (0 === rs);
             handleMediaError(4, url)
         }, 20000)
@@ -786,12 +786,12 @@ function playVideo(e) {
     function r(e, extra) {
         console.log("PLAYBACK STARTING [" + (playReason || "primary") + "]");
         armStall(e);
-        // Nem blokkolo: parhuzamosan fut a lejatszassal, hogy a hiba oka mar a
-        // 20 masodperces varakozas ALATT lathato legyen a logban.
+        // Non-blocking: runs in parallel with playback, so the error reason is
+// visible in the log DURING the 20-second wait.
         if (-1 === e.indexOf(".m3u8")) checkFaststart(e, "konténer");
         i.onerror = null;
-        // Ha van HLS is, azt tesszuk elore: a lejatszo az elso ertheto forrast
-        // valasztja, es ha a HLS-t nem tudja, magatol atlep az mp4-re.
+        // If we have HLS too, we put it first: the player chooses the first
+// understood source, and if it cannot do HLS, it automatically skips to mp4.
         setSources(i, (extra ? [extra] : []).concat([{
             url: e,
             type: -1 !== e.indexOf(".m3u8") ? MIME_HLS : MIME_MP4
@@ -844,17 +844,17 @@ function playVideo(e) {
     }
 
     var currentClaim = e,
-        hadHls = false,      // volt-e kesz HLS transcode (308 erkezett)
-        triedMp4 = false,    // megprobaltuk-e mar a nyers mp4-et
-        stalledAtZero = false, // a lejatszo a metaadatokig sem jutott
-        playReason = "";     // miert epp ezt az URL-t jatsszuk
+        hadHls = false,      // was there a ready HLS transcode (308 received)
+        triedMp4 = false,    // have we already tried the raw mp4
+        stalledAtZero = false, // the player hasn't even reached metadata
+        playReason = "";     // why are we playing exactly this URL
     playerError.style.display = "none";
     i.setAttribute("data-duration", t), i.innerHTML = "", i.src = "", a.textContent = e.value.title || "Unknown Title", n.classList.remove("hidden"), o.style.display = "block";
 
     function startVideoWithWarmup(rawUrl) {
         var retries = 0,
             maxRetries = 6,
-            useMagic = false;   // eloszor query NELKUL -> cache-elheto
+            useMagic = false;   // first WITHOUT query -> cacheable
 
         function fail(msg) {
             console.error(msg);
@@ -881,9 +881,9 @@ function playVideo(e) {
 
                 if (429 === s) return void fail("429: rate limit. Request bypassing CDN cache hit origin. Wait a few minutes.");
 
-                // A magic MINDIG cache MISS-t okoz (a CDN nem cache-eli a query
-                // stringes kereseket ezen a vegponton), ezert csak vegso esetben
-                // nyulunk hozza: ha query nelkul hotlink-vedelembe futottunk.
+                // Magic ALWAYS causes a cache MISS (the CDN does not cache requests with query
+                // strings on this endpoint), so we only use it as a last resort:
+                // if we hit hotlink protection without a query.
                 if (401 === s && !useMagic) {
                     console.log("401 without query -> trying with magic (warning: cache MISS)");
                     useMagic = true;
@@ -893,11 +893,11 @@ function playVideo(e) {
                 if (404 === s) return void fail("404: stream not found.");
 
                 if (308 === s && PREFER_HLS) {
-                    // A tc/ vegponton NINCS hotlink-ellenorzes (merve: master,
-                    // varians es .ts is 200 magic nelkul), ezert query nelkul kerjuk.
-                    // Query-vel a .m3u8 kiterjesztes a vegere kerulne egy "?"-lel,
-                    // amit ez a media pipeline nem ismer fel -- pont ez buktatta el
-                    // a v4-es alakot is.
+                    // The tc/ endpoint has NO hotlink check (measured: master,
+// variant and .ts all 200 without magic), so we request without query.
+// With a query, the .m3u8 extension would end with a "?",
+// which this media pipeline doesn't recognize -- this is exactly what broke
+// the v4 format as well.
                     var hls = OdyseeAPI.buildHlsUrl(currentClaim);
                     if (hls) {
                         hadHls = true;
@@ -960,8 +960,8 @@ function playVideo(e) {
         var n = Array.prototype.slice.call(t).map((function (e) {
             return "object" == typeof e ? JSON.stringify(e) : e
         })).join(" ");
-        // Ugyanaz a szoveg megy a dev szerverre is, ha be van kotve a devlog.js.
-        // A try/catch azert kell, hogy a naplozas soha ne dontse el az appot.
+        // The same text goes to the dev server too, if devlog.js is connected.
+// The try/catch ensures that logging never crashes the app.
         try {
             if ("undefined" != typeof RemoteLog) RemoteLog.push(e, n)
         } catch (err) { }
@@ -974,8 +974,8 @@ function playVideo(e) {
         console.error("Global Error: " + e + " at " + t + ":" + n)
     }
 }(), document.addEventListener("DOMContentLoaded", (function () {
-    // Eloszor oraszinkron, csak utana toltunk: a `magic` parameter kulonben
-    // elcsuszott TV-oraval ervenytelen lenne es 401-et kapnank.
+    // Clock sync first, load only afterwards: otherwise the `magic` parameter
+// would be invalid with a drifted TV clock and we'd get 401.
     OdyseeAPI.syncServerTime(function () {
         OdyseeAPI.getSections(function (err, sections) {
             if (err) console.error("Failed to load categories: " + err.message);
@@ -1000,7 +1000,7 @@ function playVideo(e) {
             if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 500) {
                 loadMoreContent();
             }
-            // Throttle: gorgetes kozben ne fusson minden eventre.
+            // Throttle: don't run on every event while scrolling.
             if (releaseTimer) clearTimeout(releaseTimer);
             releaseTimer = setTimeout(function () {
                 releaseOffscreenThumbs(mainContent)
@@ -1079,9 +1079,9 @@ function playVideo(e) {
         c.style.display = "none"
     })), n.addEventListener("canplay", (function () {
         c.style.display = "none";
-        // Pozitiv visszajelzes: eddig csak a hiba HIANYABOL lehetett kovetkeztetni
-        // arra, hogy elindult-e. A currentSrc megmutatja, melyik <source> nyert --
-        // ez donti el, hogy a HLS vagy az mp4 forras vitte-e el.
+        // Positive feedback: until now we could only infer from the LACK of an error
+        // whether it started. currentSrc shows which <source> won --
+        // this decides whether the HLS or the mp4 source was selected.
         clearStall();
         console.log("PLAYABLE. Player selected: " +
             (n.currentSrc || "(unknown)").substring(0, 95))

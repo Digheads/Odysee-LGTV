@@ -1,6 +1,6 @@
 var OdyseeAPI = function () {
-    // A homepage valasza (szekciok + csatornalistak) lapozasonkent nem valtozik,
-    // ezert egyszer kerjuk le es cache-eljuk.
+    // The homepage response (sections + channel lists) doesn't change per page,
+    // so we request it once and cache it.
     var homepageData = null;
 
     function fetchHomepage(cb) {
@@ -26,32 +26,32 @@ var OdyseeAPI = function () {
         r.send()
     }
 
-    // MERES (2026-08-26): a v4 vegpontra a warmup HEAD 200-at adott, a <video>
-    // megis MEDIA_ERR_SRC_NOT_SUPPORTED-tel bukott ugyanazon az URL-en. A v4 alak
-    // vegen nincs kiterjesztes (.../{claim_id}/{sd6}), es a webOS 2.0 media
-    // pipeline-ja ezt nem eszi meg, hiaba video/mp4 a Content-Type.
+    // MEASUREMENT (2026-08-26): the warmup HEAD returned 200 for the v4 endpoint, but the <video>
+    // still failed with MEDIA_ERR_SRC_NOT_SUPPORTED on the same URL. The v4 format
+    // has no extension at the end (.../{claim_id}/{sd6}), and the webOS 2.0 media
+    // pipeline doesn't accept it, even if the Content-Type is video/mp4.
     //
-    // Ezert az elsodleges alak a /v6/ .mp4 -- es NEM vesztunk vele semmit:
-    // a fitForTranscoder a v6-on is lefut HEAD-re, tehat a warmup ugyanugy
-    // megkapja a 308-at, ha van kesz HLS transcode.
+    // Therefore the primary format is /v6/ .mp4 -- and we don't lose anything by it:
+    // the fitForTranscoder runs on v6 for HEAD as well, so the warmup still
+    // gets the 308 if there is a ready HLS transcode.
     //
-    // true-ra allitva visszaall a v4-es alak (kiterjesztes nelkul).
+    // Setting this to true reverts to the v4 format (without extension).
     var USE_V4_HLS = false;
 
-    // A `magic` parameter csak akkor ervenyes, ha a szerver szerint 5 percnel
-    // fiatalabb (time.Since(ts) < 5*time.Minute). A timestampet a TV oraja adja,
-    // es egy TV orja simán elcsuszhat -- akkor 401-et kapunk. Az
-    // api.odysee.com/user/new valasza tartalmaz szerveroldali idobelyeget
-    // (created_at), ebbol kiszamoljuk az eltolast. A Date fejlec nem jarhato ut:
-    // nincs a CORS safelisten es az expose-headers sem tartalmazza.
+    // The `magic` parameter is only valid if it is less than 5 minutes old according to the server
+    // (time.Since(ts) < 5*time.Minute). The timestamp is provided by the TV's clock,
+    // and a TV clock can easily drift -- then we get a 401. The response of
+    // api.odysee.com/user/new contains a server-side timestamp (created_at),
+    // from which we calculate the offset. The Date header is not a viable path:
+    // it's not on the CORS safelist and expose-headers doesn't include it either.
     var serverTimeOffsetMs = 0,
         serverTimeSynced = false;
 
-    // A regi WebKit ISO-8601 parseolasa megbizhatatlan -> kezzel bontjuk.
-    // A player-server VerifyAccess()-e ezekre a tagekre 401-et ad
-    // (ErrEdgeCredentialsMissing), mert Authorization: Token <edgeToken> fejlecet
-    // var -- az viszont szerveroldali titok, kliens soha nem tudja megadni.
-    // Ezekre tehat NEM erdemes probalkozni: nem a magic/hotlink a baj.
+    // ISO-8601 parsing on old WebKit is unreliable -> we parse it manually.
+    // The player-server's VerifyAccess() gives a 401 for these tags
+    // (ErrEdgeCredentialsMissing), because it expects an Authorization: Token <edgeToken> header
+    // -- but that is a server-side secret, a client can never provide it.
+    // Therefore it's NOT worth trying for these: the problem is not magic/hotlink.
     function protectedReason(claim) {
         var tags = (claim.value && claim.value.tags) ? claim.value.tags : [],
             fixed = {
@@ -73,10 +73,10 @@ var OdyseeAPI = function () {
         return null;
     }
 
-    // A VerifyAccess altal vedett claimek kliensbol SOHA nem jatszhatok le
-    // (401 + "edge credentials missing"), ezert ki sem tesszuk oket a racsra.
-    // A raw_count-ot megorizzuk, kulonben a lapozas koran leallna: az app a
-    // visszakapott elemszambol kovetkeztet arra, van-e meg tovabbi oldal.
+    // Claims protected by VerifyAccess can NEVER be played from a client
+    // (401 + "edge credentials missing"), so we don't even put them on the grid.
+    // We preserve raw_count, otherwise pagination would stop early: the app infers
+    // whether there is another page from the number of returned items.
     function filterPlayable(cb) {
         return function (err, res) {
             if (err || !res || !res.items) return cb(err, res);
@@ -100,9 +100,9 @@ var OdyseeAPI = function () {
         return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
     }
 
-    // A claim_search valaszideje eresen ingadozik (mertem 1 mp-et es 18 mp folotti
-    // timeoutot is ugyanarra a lekerdezesre), ezert halozati hiba/timeout eseten
-    // ujraprobalunk. API-hibara (JSON-RPC error) NEM, az determinisztikus.
+    // The response time of claim_search fluctuates strongly (I measured 1s and over 18s
+    // timeout for the exact same query), so in case of network error/timeout we
+    // retry. We do NOT retry on API errors (JSON-RPC error), those are deterministic.
     function rpc(e, t, r, attempt) {
         attempt = attempt || 0;
         var maxAttempts = 3;
@@ -141,8 +141,8 @@ var OdyseeAPI = function () {
     var e = rpc;
 
     return {
-        // Egyszer fut le inditaskor. Mellekhatasként az auth tokent is eltarolja,
-        // igy a getViewCount nem fog ujabb user/new hivast inditani.
+        // Runs once at startup. As a side effect it also stores the auth token,
+        // so getViewCount won't initiate another user/new call.
         syncServerTime: function (cb) {
             if (serverTimeSynced) return cb && cb();
             var xhr = new XMLHttpRequest();
@@ -175,12 +175,12 @@ var OdyseeAPI = function () {
             xhr.send()
         },
 
-        // A transcodolt HLS master playlist URL-je, a claim adataibol felepitve.
-        // Igy nem kell kovetni a 308-as atiranyitast, amit egy 2015-os media
-        // pipeline lehet hogy nem kezel (a 308 ujabb, mint a 301/302/303/307).
-        // A formatumot a player-server getPlaylistURL() v4-es aga adja:
-        //   /api/v4/streams/tc/{claim_name}/{claim_id}/{TELJES_sd_hash}/master.m3u8
-        // Figyelem: itt a teljes 96 karakteres sd_hash kell, nem a 6 karakteres prefix.
+        // The URL of the transcoded HLS master playlist, built from the claim data.
+        // This way we don't have to follow the 308 redirect, which a 2015 media
+        // pipeline might not handle (308 is newer than 301/302/303/307).
+        // The format is provided by the v4 branch of player-server's getPlaylistURL():
+        //   /api/v4/streams/tc/{claim_name}/{claim_id}/{FULL_sd_hash}/master.m3u8
+        // Note: the full 96-character sd_hash is required here, not the 6-character prefix.
         buildHlsUrl: function (claim) {
             var c = claim.reposted_claim || claim,
                 sd = c.value && c.value.source ? c.value.source.sd_hash : "";
@@ -189,9 +189,9 @@ var OdyseeAPI = function () {
                 encodeURIComponent(c.name) + "/" + c.claim_id + "/" + sd + "/master.m3u8";
         },
 
-        // A legkompatibilisebb mp4 alak: /v6/ vegpont, .mp4 kiterjesztessel.
-        // Ez sosem iranyit at HLS-re (a fitForTranscoder a v6-on csak HEAD-re fut),
-        // es a kiterjesztes miatt a regi media pipeline is felismeri a tipust.
+        // The most compatible mp4 format: /v6/ endpoint, with .mp4 extension.
+        // This never redirects to HLS (fitForTranscoder only runs for HEAD on v6),
+        // and because of the extension, the old media pipeline recognizes the type.
         buildMp4Url: function (claim) {
             var c = claim.reposted_claim || claim,
                 sd = c.value && c.value.source ? c.value.source.sd_hash : "";
@@ -199,13 +199,13 @@ var OdyseeAPI = function () {
             return "http://player.odycdn.com/v6/streams/" + c.claim_id + "/" + sd.substring(0, 6) + ".mp4";
         },
 
-        // Szerverhez igazitott UNIX masodperc a `magic` parameterhez.
+        // UNIX seconds adjusted to the server for the `magic` parameter.
         getServerNowSec: function () {
             return Math.floor((new Date().getTime() + serverTimeOffsetMs) / 1000)
         },
 
-        // A homepage szekcioi (Featured, Gaming, Tech, Comedy, ...). Ugyanabbol a
-        // valaszbol jonnek, amit a kategoria-lekerdezes is hasznal -> nincs plusz keres.
+        // Homepage sections (Featured, Gaming, Tech, Comedy, ...). They come from the same
+        // response that the category request uses -> no extra request needed.
         getSections: function (cb) {
             fetchHomepage(function (err, data) {
                 if (err) return cb(err);
@@ -301,7 +301,7 @@ var OdyseeAPI = function () {
             }, n.send()
         },
         getStreamingSourceUrl: function (t, r) {
-            // Repost eseten a tenyleges stream a reposted_claim-ben van.
+            // For reposts, the actual stream is in reposted_claim.
             var claim = t.reposted_claim || t,
                 name = claim.name,
                 cid = claim.claim_id,
@@ -310,12 +310,12 @@ var OdyseeAPI = function () {
             var blocked = protectedReason(claim);
             if (blocked) return r(new Error(blocked + " The player cannot decode this."));
 
-            // A /api/v4/ vegpont maga donti el, mit szolgal ki: ha van kesz HLS
-            // transcode, 308-cal atiranyit a master.m3u8-ra (libx264 + AAC + .ts
-            // szegmensek = HLS v3, amit a webOS 2.0 nativan visz), ha nincs, az
-            // eredeti mp4-et adja. A `fitForTranscoder` az /api/v4/ prefixre
-            // mindig lefut, nem csak HEAD-re -- ezert eleg egyetlen URL.
-            // Bonusz: a `get` RPC korutat is megsporoljuk.
+            // The /api/v4/ endpoint decides itself what to serve: if there is a ready HLS
+            // transcode, it redirects with 308 to master.m3u8 (libx264 + AAC + .ts
+            // segments = HLS v3, which webOS 2.0 handles natively); if not, it
+            // returns the original mp4. The `fitForTranscoder` runs for the /api/v4/ prefix
+            // always, not just for HEAD -- so a single URL is enough.
+            // Bonus: we save the roundtrip of the `get` RPC.
             if (name && cid && sd) {
                 var u = USE_V4_HLS ?
                     "http://player.odycdn.com/api/v4/streams/free/" +
@@ -325,9 +325,9 @@ var OdyseeAPI = function () {
                 return r(null, u)
             }
 
-            // Nincs sd_hash (pl. livestream, vagy hianyos claim) -> `get` RPC.
-            // A permanent_url a legmegbizhatobb; a short_url meresem szerint
-            // ~8%-ban "couldn't find claim"-et ad.
+            // No sd_hash (e.g., livestream, or incomplete claim) -> fallback to `get` RPC.
+            // permanent_url is the most reliable; my measurements show that short_url
+            // gives "couldn't find claim" in ~8% of cases.
             console.log("OdyseeAPI: no sd_hash, fallback to get RPC");
             var uris = [];
             if (claim.permanent_url) uris.push(claim.permanent_url);

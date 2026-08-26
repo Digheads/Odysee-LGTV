@@ -74,11 +74,11 @@
     </div>
 
 
-    <!-- Fejlesztoi naplozas. Elesitesnel ezt a ket blokkot vedd ki. -->
+    <!-- Developer logging. Remove these two blocks before deploying to production. -->
     <script>
-        // Csak akkor kell, ha az app file://-bol indul (telepitett appkent).
-        // Ha a dev szerverrol toltod be (http://<ip>:3000/), hagyd kikommentezve:
-        // a devlog.js magatol a betoltes helyere kuld.
+        // Only needed if the app runs from file:// (as an installed app).
+        // If loading from the dev server (http://<ip>:3000/), leave this commented out:
+        // devlog.js will automatically send logs to the load origin.
         window.DEVLOG_HOST = "192.168.0.172:3000";
     </script>
     <script src="js/devlog.js"></script>
