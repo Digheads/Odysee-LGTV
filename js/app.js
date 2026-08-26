@@ -625,6 +625,8 @@ function doSearch(e) {
     var t = document.getElementById("video-grid"),
         n = document.getElementById("loading");
 
+    if (isLoading && currentSearchQuery === e) return;
+
     currentPage = 1;
     currentCategory = 'nav-search';
     currentSearchQuery = e;
