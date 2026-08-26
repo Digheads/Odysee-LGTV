@@ -46,13 +46,20 @@
             <div id="player-loading" class="player-loading"></div>
             <video id="video-player" class="video-player" autoplay></video>
             <div id="custom-controls" class="custom-controls">
-                <div class="time-container">
-                    <span id="time-display" class="time-display">00:00 / 00:00</span>
+                <div class="seeker-info-row">
+                    <div id="meta-reactions" class="video-meta meta-left"></div>
+                    <div class="time-container meta-right">
+                        <span id="time-display" class="time-display">00:00 / 00:00</span>
+                    </div>
                 </div>
                 <div class="progress-container">
                     <div id="progress-bar" class="progress-bar">
                         <div id="progress-fill" class="progress-fill"></div>
                     </div>
+                </div>
+                <div class="seeker-bottom-row">
+                    <div id="meta-date" class="video-meta meta-left"></div>
+                    <div id="meta-views" class="video-meta meta-right"></div>
                 </div>
                 <div class="controls-row">
                     <button class="focusable btn-player btn-play-pause" id="btn-play-pause">&#9632;</button>

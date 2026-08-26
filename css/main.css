@@ -101,6 +101,7 @@ body {
     padding-bottom: 60px;
     padding-right: 20px;
     flex: 1;
+    font-size: 0;
 }
 
 .video-grid::after {
@@ -115,7 +116,9 @@ body {
 }
 
 .video-card {
-    float: left;
+    display: inline-block;
+    vertical-align: top;
+    font-size: 16px;
     width: 23%;
     margin-right: 2.66%;
     margin-bottom: 40px;
@@ -144,8 +147,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background-size: cover;
-    background-position: center;
+    object-fit: cover;
     background-color: #2A2D35;
     border-radius: 12px;
 }
@@ -174,6 +176,12 @@ body {
     font-size: 15px;
     color: #9CA3AF;
     margin-top: auto;
+}
+
+.video-card .card-date {
+    font-size: 13px;
+    color: #6B7280;
+    margin-top: 4px;
 }
 
 .video-card.focused {
@@ -303,14 +311,43 @@ body {
 }
 
 .controls-row {
+    margin-top: 20px;
     display: block;
     text-align: center;
+}
+
+.seeker-bottom-row, .seeker-info-row {
     width: 100%;
+}
+.seeker-bottom-row::after, .seeker-info-row::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.seeker-bottom-row {
+    margin-top: 12px;
+}
+.seeker-info-row {
+    margin-bottom: 12px;
+}
+
+.meta-left {
+    float: left;
+}
+
+.meta-right {
+    float: right;
+}
+
+.video-meta {
+    font-size: 24px;
+    color: white;
+    font-weight: 500;
 }
 
 .time-container {
     text-align: right;
-    margin-bottom: 12px;
 }
 
 .time-display {

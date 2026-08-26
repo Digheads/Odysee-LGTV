@@ -21,7 +21,7 @@ var OdyseeAPI = function () {
         }))
     }
     return {
-        getHome: function (t) {
+        getHome: function (t, page) {
             console.log("OdyseeAPI: Fetching Home categories...");
             var r = new XMLHttpRequest;
             r.open("GET", "https://odysee.com/$/api/content/v1/get?language=en", !0), r.onreadystatechange = function () {
@@ -33,6 +33,7 @@ var OdyseeAPI = function () {
                             claim_type: ["stream"],
                             stream_types: ["video"],
                             page_size: 20,
+                            page: page || 1,
                             order_by: ["trending_group", "trending_mixed"]
                         }, t)
                     } catch (e) {
@@ -40,18 +41,20 @@ var OdyseeAPI = function () {
                     } else t(new Error("Home API failed: " + r.status))
             }, r.send()
         },
-        getTrending: function (t) {
+        getTrending: function (t, page) {
             e("claim_search", {
                 claim_type: ["stream"],
                 stream_types: ["video"],
                 page_size: 20,
+                page: page || 1,
                 order_by: ["trending_group", "trending_mixed"]
             }, t)
         },
-        search: function (t, r) {
+        search: function (t, r, page) {
+            var p = page || 1;
             console.log("OdyseeAPI: Searching lighthouse for: " + t);
             var n = new XMLHttpRequest,
-                s = "https://lighthouse.odysee.tv/search?s=" + encodeURIComponent(t) + "&size=20&from=0&claimType=file&mediaType=video";
+                s = "https://lighthouse.odysee.tv/search?s=" + encodeURIComponent(t) + "&size=20&from=" + ((p - 1) * 20) + "&claimType=file&mediaType=video";
             n.open("GET", s, !0), n.onreadystatechange = function () {
                 if (4 === n.readyState)
                     if (200 === n.status) try {
@@ -90,6 +93,73 @@ var OdyseeAPI = function () {
                     console.log("OdyseeAPI: Stream URL resolved: " + n), r(null, n)
                 } else r(new Error("No streaming_url returned"))
             }))
+        },
+        getReactions: function (claimId, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "https://api.odysee.com/reaction/list", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            if (resp && resp.data && resp.data.others_reactions && resp.data.others_reactions[claimId]) {
+                                callback(null, resp.data.others_reactions[claimId]);
+                            } else {
+                                callback(null, { like: 0, dislike: 0 });
+                            }
+                        } catch (e) {
+                            callback(e);
+                        }
+                    } else {
+                        callback(new Error("Reaction API failed"));
+                    }
+                }
+            };
+            xhr.send("claim_ids=" + claimId);
+        },
+        getViewCount: function (claimId, callback) {
+            function fetchViews(token) {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "https://api.odysee.com/file/view_count", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                var resp = JSON.parse(xhr.responseText);
+                                if (resp && resp.data && resp.data.length > 0) {
+                                    callback(null, resp.data[0]);
+                                } else {
+                                    callback(null, 0);
+                                }
+                            } catch (e) { callback(e); }
+                        } else { callback(new Error("View count API failed")); }
+                    }
+                };
+                xhr.send("auth_token=" + token + "&claim_id=" + claimId);
+            }
+
+            if (window.odyseeAuthToken) {
+                fetchViews(window.odyseeAuthToken);
+            } else {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "https://api.odysee.com/user/new", true);
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                var resp = JSON.parse(xhr.responseText);
+                                if (resp && resp.data && resp.data.auth_token) {
+                                    window.odyseeAuthToken = resp.data.auth_token;
+                                    fetchViews(window.odyseeAuthToken);
+                                } else { callback(new Error("No auth token in response")); }
+                            } catch (e) { callback(e); }
+                        } else { callback(new Error("User creation failed")); }
+                    }
+                };
+                xhr.send();
+            }
         }
     }
 }();
