@@ -515,7 +515,7 @@ function dispatchLoad(id, page, cb) {
     if ("nav-trending" === id) return OdyseeAPI.getTrending(cb, page);
     if ("nav-search" === id) return OdyseeAPI.search(currentSearchQuery, cb, page);
     if (0 === id.indexOf("cat:")) return OdyseeAPI.getCategory(id.substring(4), cb, page);
-    cb(new Error("Ismeretlen nezet: " + id))
+    cb(new Error("Unknown view: " + id))
 }
 
 function bindNav() {
@@ -684,7 +684,8 @@ function playVideo(e) {
         n = document.getElementById("player-container"),
         i = document.getElementById("video-player"),
         o = document.getElementById("player-loading"),
-        a = document.getElementById("player-title");
+        a = document.getElementById("player-title"),
+        playerError = document.getElementById("player-error");
 
     function handleMediaError(code, url) {
         clearStall();
@@ -692,12 +693,12 @@ function playVideo(e) {
         // a fallback is azzal kell menjen, kulonben a hotlink-vedelem 401-et ad.
         var magicOn = -1 !== url.indexOf("magic=");
         var msg = {
-            1: "Megszakitva (MEDIA_ERR_ABORTED).",
-            2: "Halozati hiba (MEDIA_ERR_NETWORK).",
-            3: "Dekodolasi hiba (MEDIA_ERR_DECODE) - a TV nem birja a kodeket.",
-            4: "Nem tamogatott forras (MEDIA_ERR_SRC_NOT_SUPPORTED)."
-        }[code] || ("Ismeretlen mediahiba (" + code + ").");
-        console.error("Video hiba " + code + ": " + msg);
+            1: "Aborted (MEDIA_ERR_ABORTED).",
+            2: "Network error (MEDIA_ERR_NETWORK).",
+            3: "Decode error (MEDIA_ERR_DECODE) - unsupported codec.",
+            4: "Unsupported source (MEDIA_ERR_SRC_NOT_SUPPORTED)."
+        }[code] || ("Unknown media error (" + code + ").");
+        console.error("Video error " + code + ": " + msg);
         o.style.display = "none";
 
         // A 3-as/4-es kod jellemzoen formatum-problema. Ket forrasunk van, es ha az
@@ -711,12 +712,13 @@ function playVideo(e) {
                 var mp4 = OdyseeAPI.buildMp4Url(currentClaim);
                 if (mp4) {
                     triedMp4 = true;
-                    playReason = "nyers mp4 fallback (elozo forras hibakod: " + code + ")";
-                    console.log("VISSZAESES OKA: a(z) " + (hadHls ? "HLS" : "v4") +
-                        " forras " + code + "-as hibaval bukott -> nyers mp4: " + mp4);
+                    playReason = "raw mp4 fallback (previous source error code: " + code + ")";
+                    console.log("FALLBACK REASON: " + (hadHls ? "HLS" : "v4") +
+                        " source failed with error " + code + " -> raw mp4: " + mp4);
                     probeUrl(buildPlayableUrl(mp4, magicOn), "mp4-proba");
-                    a.textContent = (hadHls ? "A HLS nem jatszhato" : "Ez a forras nem jatszhato") +
-                        ", nyers mp4-gyel probalom...";
+                    playerError.textContent = (hadHls ? "HLS is not playable" : "This source is not playable") +
+                        ", trying raw mp4...";
+                    playerError.style.display = "block";
                     o.style.display = "block";
                     return void r(buildPlayableUrl(mp4, magicOn))
                 }
@@ -727,20 +729,25 @@ function playVideo(e) {
             if (hadHls) {
                 // Van kesz transcode, csak nem jatszhato (szinte biztosan a
                 // playlist EXT-X-VERSION:6-ja) -- uj transcode kerese nem segit.
-                a.textContent = "Sem a HLS, sem a nyers mp4 nem jatszhato le ezen a TV-n."
+                playerError.textContent = "Cannot start the video this time, please try again later.";
+                playerError.style.display = "block";
             } else {
                 // Nincs transcode: keressuk egyet. A HEAD felveszi a streamet a
                 // transcoder soraba (fitForTranscoder -> pool.Admit). A `common`
                 // queue MinHits-kuszobos, tehat egy keres lehet hogy keves.
-                a.textContent = msg + " Transzkodolas kerve, probald par perc mulva.";
+                playerError.textContent = "Cannot start the video this time, please try again later. Transcoding requested.";
+                playerError.style.display = "block";
                 var q = new XMLHttpRequest();
                 q.open("HEAD", buildPlayableUrl(url, true), true);
                 q.onreadystatechange = function () {
-                    if (4 === q.readyState) console.log("Transcode-sorbaallitas: " + q.status)
+                    if (4 === q.readyState) console.log("Transcode queued: " + q.status)
                 };
                 q.send()
             }
-        } else a.textContent = msg
+        } else {
+            playerError.textContent = "Cannot start the video this time, please try again later.";
+            playerError.style.display = "block";
+        }
     }
 
     // A <video> nem jelez, ha egyszeruen nem indul el -- ilyenkor a lejatszo
@@ -752,7 +759,7 @@ function playVideo(e) {
             stallTimer = null;
             if (i.readyState >= 3) return;   // HAVE_FUTURE_DATA -> megis elindult
             var rs = i.readyState;
-            console.error("Nem indult el 20 mp alatt (readyState=" + rs + ")");
+            console.error("Did not start within 20s (readyState=" + rs + ")");
             // readyState 0 = HAVE_NOTHING: a lejatszo meg a metaadatokig sem jutott.
             // Ez NEM kodek-elutasitas -- akkor eloszor beolvasna a moov-ot es csak
             // utana hibazna. A tipikus ok: a moov a fajl vegen van (nem faststart),
@@ -763,7 +770,7 @@ function playVideo(e) {
     }
 
     function r(e, extra) {
-        console.log("LEJATSZAS INDUL [" + (playReason || "elsodleges") + "]");
+        console.log("PLAYBACK STARTING [" + (playReason || "primary") + "]");
         armStall(e);
         // Nem blokkolo: parhuzamosan fut a lejatszassal, hogy a hiba oka mar a
         // 20 masodperces varakozas ALATT lathato legyen a logban.
@@ -827,6 +834,7 @@ function playVideo(e) {
         triedMp4 = false,    // megprobaltuk-e mar a nyers mp4-et
         stalledAtZero = false, // a lejatszo a metaadatokig sem jutott
         playReason = "";     // miert epp ezt az URL-t jatsszuk
+    playerError.style.display = "none";
     i.setAttribute("data-duration", t), i.innerHTML = "", i.src = "", a.textContent = e.value.title || "Unknown Title", n.classList.remove("hidden"), o.style.display = "block";
 
     function startVideoWithWarmup(rawUrl) {
@@ -837,7 +845,9 @@ function playVideo(e) {
         function fail(msg) {
             console.error(msg);
             o.style.display = "none";
-            a.textContent = msg;
+            playerError.textContent = "Cannot start the video this time, please try again later.";
+            playerError.style.display = "block";
+            a.textContent = e.value.title || "Unknown Title";
         }
 
         function warm() {
@@ -855,18 +865,18 @@ function playVideo(e) {
                 console.log("Warmup " + s + (cache ? " cache=" + cache : "") +
                     (useMagic ? " [magic]" : " [query nelkul]") + " r=" + retries);
 
-                if (429 === s) return void fail("429: rate limit. A CDN cache-t megkerulo keres az originre ment. Varj par percet.");
+                if (429 === s) return void fail("429: rate limit. Request bypassing CDN cache hit origin. Wait a few minutes.");
 
                 // A magic MINDIG cache MISS-t okoz (a CDN nem cache-eli a query
                 // stringes kereseket ezen a vegponton), ezert csak vegso esetben
                 // nyulunk hozza: ha query nelkul hotlink-vedelembe futottunk.
                 if (401 === s && !useMagic) {
-                    console.log("401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)");
+                    console.log("401 without query -> trying with magic (warning: cache MISS)");
                     useMagic = true;
                     return void warm()
                 }
-                if (401 === s) return void fail("401: a hotlink-vedelem magic-kel sem engedett at.");
-                if (404 === s) return void fail("404: a stream nem talalhato.");
+                if (401 === s) return void fail("401: hotlink protection blocked access even with magic.");
+                if (404 === s) return void fail("404: stream not found.");
 
                 if (308 === s && PREFER_HLS) {
                     // A tc/ vegponton NINCS hotlink-ellenorzes (merve: master,
@@ -877,7 +887,7 @@ function playVideo(e) {
                     var hls = OdyseeAPI.buildHlsUrl(currentClaim);
                     if (hls) {
                         hadHls = true;
-                        playReason = "HLS + mp4 tartalek, explicit type-pal";
+                        playReason = "HLS + mp4 fallback, explicit type";
                         return void r(buildPlayableUrl(rawUrl, useMagic), {
                             url: hls,
                             type: MIME_HLS
@@ -888,7 +898,7 @@ function playVideo(e) {
                     retries++;
                     return void setTimeout(warm, 3000);
                 }
-                playReason = useMagic ? "eredeti mp4, magic-kel" : "eredeti mp4, query nelkul (cache-elheto)";
+                playReason = useMagic ? "original mp4, with magic" : "original mp4, without query (cacheable)";
                 r(buildPlayableUrl(rawUrl, useMagic))
             };
             xhr.ontimeout = xhr.onerror = function () {
@@ -954,7 +964,7 @@ function playVideo(e) {
     // elcsuszott TV-oraval ervenytelen lenne es 401-et kapnank.
     OdyseeAPI.syncServerTime(function () {
         OdyseeAPI.getSections(function (err, sections) {
-            if (err) console.error("Kategoriak betoltese sikertelen: " + err.message);
+            if (err) console.error("Failed to load categories: " + err.message);
             buildNav(sections || []);
             SpatialNavigation.refresh();
             loadPage("nav-trending")
@@ -1048,8 +1058,8 @@ function playVideo(e) {
         // arra, hogy elindult-e. A currentSrc megmutatja, melyik <source> nyert --
         // ez donti el, hogy a HLS vagy az mp4 forras vitte-e el.
         clearStall();
-        console.log("LEJATSZHATO. A lejatszo ezt valasztotta: " +
-            (n.currentSrc || "(ismeretlen)").substring(0, 95))
+        console.log("PLAYABLE. Player selected: " +
+            (n.currentSrc || "(unknown)").substring(0, 95))
     })), n.addEventListener("error", (function () {
         c.style.display = "none"
     })), n.addEventListener("timeupdate", (function () {

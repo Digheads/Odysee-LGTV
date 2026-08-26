@@ -21,7 +21,7 @@ var OdyseeAPI = function () {
             cb(new Error("Homepage API failed: " + r.status))
         };
         r.ontimeout = r.onerror = function () {
-            cb(new Error("Homepage API nem elerheto"))
+            cb(new Error("Homepage API unavailable"))
         };
         r.send()
     }
@@ -55,20 +55,20 @@ var OdyseeAPI = function () {
     function protectedReason(claim) {
         var tags = (claim.value && claim.value.tags) ? claim.value.tags : [],
             fixed = {
-                "c:members-only": "Tagsagi (members-only) tartalom.",
-                "c:rental": "Berelheto tartalom.",
-                "c:purchase": "Megvasarolhato tartalom.",
-                "c:unlisted": "Nem listazott tartalom."
+                "c:members-only": "Members-only content.",
+                "c:rental": "Rental content.",
+                "c:purchase": "Purchasable content.",
+                "c:unlisted": "Unlisted content."
             },
             releaseTime = (claim.value && claim.value.release_time) ? +claim.value.release_time : 0,
             nowSec = Math.floor((new Date().getTime() + serverTimeOffsetMs) / 1000);
         for (var i = 0; i < tags.length; i++) {
             var t = tags[i];
             if (fixed[t]) return fixed[t];
-            if (0 === t.indexOf("purchase:")) return "Megvasarolhato tartalom.";
-            if (0 === t.indexOf("rental:")) return "Berelheto tartalom.";
+            if (0 === t.indexOf("purchase:")) return "Purchasable content.";
+            if (0 === t.indexOf("rental:")) return "Rental content.";
             if (("c:scheduled:show" === t || "c:scheduled:hide" === t) && releaseTime > nowSec)
-                return "Utemezett tartalom, meg nem jelent meg.";
+                return "Scheduled content, not yet released.";
         }
         return null;
     }
@@ -89,7 +89,7 @@ var OdyseeAPI = function () {
             res.raw_count = before;
             res.items = out;
             if (before !== out.length)
-                console.log("Kiszurve " + (before - out.length) + "/" + before + " vedett claim");
+                console.log("Filtered out " + (before - out.length) + "/" + before + " protected claim(s)");
             return cb(err, res)
         }
     }
@@ -110,8 +110,8 @@ var OdyseeAPI = function () {
         function retryOrFail(err) {
             if (attempt + 1 < maxAttempts) {
                 var wait = 2000 * (attempt + 1);
-                console.log("API ujraprobalkozas " + (attempt + 1) + "/" + (maxAttempts - 1) +
-                    " (" + wait / 1000 + " mp mulva): " + e);
+                console.log("API retry " + (attempt + 1) + "/" + (maxAttempts - 1) +
+                    " (in " + wait / 1000 + "s): " + e);
                 return void setTimeout(function () {
                     rpc(e, t, r, attempt + 1)
                 }, wait)
@@ -122,7 +122,7 @@ var OdyseeAPI = function () {
         "get" === e && (n += "?m=get"), console.log("OdyseeAPI: Starting request to " + n);
         var s = new XMLHttpRequest;
         s.open("POST", n, !0), s.setRequestHeader("Content-Type", "application/json-rpc"), s.timeout = 2e4, s.ontimeout = function () {
-            retryOrFail(new Error("Timeout: nem erem el a " + n + " cimet"))
+            retryOrFail(new Error("Timeout: cannot reach " + n))
         }, s.onreadystatechange = function () {
             if (4 === s.readyState)
                 if (200 === s.status) try {
@@ -157,19 +157,19 @@ var OdyseeAPI = function () {
                         if (!isNaN(srv)) {
                             serverTimeOffsetMs = srv - new Date().getTime();
                             serverTimeSynced = true;
-                            console.log("Ora-szinkron: eltolas " +
-                                Math.round(serverTimeOffsetMs / 1000) + " mp (TV ora " +
-                                (serverTimeOffsetMs > 0 ? "kesik" : "siet") + ")");
+                            console.log("Time sync: offset " +
+                                Math.round(serverTimeOffsetMs / 1000) + "s (TV clock " +
+                                (serverTimeOffsetMs > 0 ? "slow" : "fast") + ")");
                         }
                         if (d.auth_token) window.odyseeAuthToken = d.auth_token;
                     } catch (err) {
-                        console.error("Ora-szinkron parse hiba: " + err.message)
+                        console.error("Time sync parse error: " + err.message)
                     }
-                } else console.error("Ora-szinkron sikertelen: " + xhr.status);
+                } else console.error("Time sync failed: " + xhr.status);
                 cb && cb()
             };
             xhr.ontimeout = xhr.onerror = function () {
-                console.error("Ora-szinkron nem elerheto, a TV orajat hasznaljuk");
+                console.error("Time sync unavailable, using TV clock");
                 cb && cb()
             };
             xhr.send()
@@ -226,7 +226,7 @@ var OdyseeAPI = function () {
                 out.sort(function (x, y) {
                     return x.sortOrder - y.sortOrder
                 });
-                console.log("OdyseeAPI: " + out.length + " kategoria");
+                console.log("OdyseeAPI: " + out.length + " category(ies)");
                 cb(null, out)
             })
         },
@@ -235,7 +235,7 @@ var OdyseeAPI = function () {
             fetchHomepage(function (err, data) {
                 if (err) return t(err);
                 var sec = data[key];
-                if (!sec || !(sec.channelIds || []).length) return t(new Error("Ismeretlen kategoria: " + key));
+                if (!sec || !(sec.channelIds || []).length) return t(new Error("Unknown category: " + key));
                 e("claim_search", {
                     channel_ids: (sec.channelIds || []).slice(0, 50),
                     claim_type: ["stream"],
@@ -308,7 +308,7 @@ var OdyseeAPI = function () {
                 sd = claim.value && claim.value.source ? claim.value.source.sd_hash : "";
 
             var blocked = protectedReason(claim);
-            if (blocked) return r(new Error(blocked + " Ezt a lejatszo nem tudja feloldani."));
+            if (blocked) return r(new Error(blocked + " The player cannot decode this."));
 
             // A /api/v4/ vegpont maga donti el, mit szolgal ki: ha van kesz HLS
             // transcode, 308-cal atiranyit a master.m3u8-ra (libx264 + AAC + .ts
@@ -328,7 +328,7 @@ var OdyseeAPI = function () {
             // Nincs sd_hash (pl. livestream, vagy hianyos claim) -> `get` RPC.
             // A permanent_url a legmegbizhatobb; a short_url meresem szerint
             // ~8%-ban "couldn't find claim"-et ad.
-            console.log("OdyseeAPI: nincs sd_hash, fallback a get RPC-re");
+            console.log("OdyseeAPI: no sd_hash, fallback to get RPC");
             var uris = [];
             if (claim.permanent_url) uris.push(claim.permanent_url);
             if (claim.canonical_url && -1 === uris.indexOf(claim.canonical_url)) uris.push(claim.canonical_url);
