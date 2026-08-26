@@ -1062,6 +1062,8 @@ function playVideo(e) {
             (n.currentSrc || "(unknown)").substring(0, 95))
     })), n.addEventListener("error", (function () {
         c.style.display = "none"
+    })), n.addEventListener("ended", (function () {
+        closePlayer()
     })), n.addEventListener("timeupdate", (function () {
         var e = n.currentTime || 0,
             t = n.duration,
