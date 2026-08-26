@@ -103,6 +103,10 @@ var SpatialNavigation = function () {
             }))
         },
         refresh: a,
-        focusElement: n
+        focusElement: n,
+        focusNode: function(node) {
+            var idx = e.indexOf(node);
+            if (idx !== -1) n(idx);
+        }
     }
 }();

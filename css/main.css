@@ -106,6 +106,19 @@ body {
     letter-spacing: -1px;
 }
 
+.search-input.focused {
+    border-color: #E2225E !important;
+    box-shadow: 0 0 15px rgba(226, 34, 94, 0.5);
+    background: #1a1a1a !important;
+}
+
+.btn-search.focused {
+    background: #FF4B72 !important;
+    border-color: white !important;
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(226, 34, 94, 0.4);
+}
+
 .video-grid {
     display: block;
     width: 100%;

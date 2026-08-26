@@ -988,12 +988,10 @@ function playVideo(e) {
     bindNav();
     var n = document.getElementById("btn-search"),
         i = document.getElementById("search-input");
-    n && i && (n.addEventListener("click", (function () {
+    n && i && n.addEventListener("click", (function () {
         var e = i.value.trim();
         e.length > 0 && doSearch(e)
-    })), i.addEventListener("keydown", (function (e) {
-        13 === e.keyCode && (e.preventDefault(), n.click())
-    })))
+    }))
 
     var mainContent = document.getElementById("main-content");
     if (mainContent) {
