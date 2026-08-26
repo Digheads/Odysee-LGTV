@@ -1098,7 +1098,7 @@ function playVideo(e) {
         if (watchdogTimer) clearInterval(watchdogTimer);
         lastTime = n.currentTime;
         stuckCount = 0;
-        isBufferingAllowed = true; // initially true for startup
+        isBufferingAllowed = false; // The video is now playing, so future stalls are unexpected
         watchdogTimer = setInterval(function() {
             try {
                 if (!n.paused && !n.ended) {
