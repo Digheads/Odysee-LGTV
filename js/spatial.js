@@ -48,6 +48,15 @@ var SpatialNavigation = function () {
         if (0 !== e.length) {
             var i = e[t];
             if (i) {
+                if (a.keyCode === 39 && i.classList.contains("nav-item")) {
+                    for (var k = 0; k < e.length; k++) {
+                        if (e[k].classList.contains("video-card") || e[k].id === "search-input" || e[k].id === "btn-search") {
+                            a.preventDefault();
+                            n(k);
+                            return;
+                        }
+                    }
+                }
                 for (var o = c(i), s = -1, r = 1 / 0, f = 0; f < e.length; f++)
                     if (f !== t) {
                         var l = c(e[f]),
