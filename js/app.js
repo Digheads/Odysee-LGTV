@@ -505,6 +505,7 @@ var navSections = [];
 function sectionLabel(id) {
     if ("nav-trending" === id) return "Trending";
     if ("nav-search" === id) return "Search";
+    if ("nav-login" === id) return "Login";
     var key = 0 === id.indexOf("cat:") ? id.substring(4) : "";
     for (var i = 0; i < navSections.length; i++)
         if (navSections[i].key === key) return navSections[i].label;
@@ -531,14 +532,17 @@ function buildNav(sections) {
     navSections = sections || [];
     var ul = document.querySelector(".nav-links");
     if (!ul) return;
-    var items = [{ id: "nav-trending", label: "Trending" }];
+    var items = [
+        { id: "nav-search", label: "Search" },
+        { id: "nav-login", label: "Login" },
+        { id: "nav-trending", label: "Trending" }
+    ];
     for (var i = 0; i < navSections.length; i++)
         items.push({ id: "cat:" + navSections[i].key, label: navSections[i].label });
-    items.push({ id: "nav-search", label: "Search" });
     ul.innerHTML = "";
     for (var j = 0; j < items.length; j++) {
         var li = document.createElement("li");
-        li.className = "focusable nav-item" + (0 === j ? " active" : "");
+        li.className = "focusable nav-item" + (items[j].id === "nav-trending" ? " active" : "");
         li.setAttribute("data-id", items[j].id);
         li.appendChild(document.createTextNode(items[j].label));
         ul.appendChild(li)
@@ -570,6 +574,16 @@ function loadPage(e) {
         return i.innerText = "Search", setDisplayFlex(o), n.style.display = "none", SpatialNavigation.refresh(), void (a && setTimeout((function () {
             a.focus()
         }), 100));
+    }
+    
+    if ("nav-login" === e) {
+        isLoading = false;
+        i.innerText = "Login";
+        o.style.display = "none";
+        n.style.display = "none";
+        t.innerHTML = '<div style="color:white;text-align:center;width:100%;font-size:32px;margin-top:100px;font-weight:600;">Log In to Odysee (Coming Soon)</div>';
+        SpatialNavigation.refresh();
+        return;
     }
 
     function r(e, i) {
