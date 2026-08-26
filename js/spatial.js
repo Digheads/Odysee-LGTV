@@ -93,7 +93,16 @@ var SpatialNavigation = function () {
                                 return
                         }
                         v && u < r && (r = u, s = f)
-                    } - 1 !== s ? (a.preventDefault(), n(s)) : a.keyCode >= 37 && a.keyCode <= 40 && a.preventDefault()
+                    } 
+                    if (s !== -1 && e[s].classList.contains("nav-item") && !i.classList.contains("nav-item")) {
+                        for (var k = 0; k < e.length; k++) {
+                            if (e[k].classList.contains("nav-item") && e[k].classList.contains("active")) {
+                                s = k;
+                                break;
+                            }
+                        }
+                    }
+                    - 1 !== s ? (a.preventDefault(), n(s)) : a.keyCode >= 37 && a.keyCode <= 40 && a.preventDefault()
             } else n(0)
         }
     }

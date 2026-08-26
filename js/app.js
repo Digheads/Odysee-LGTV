@@ -1027,8 +1027,16 @@ function playVideo(e) {
         document.getElementById("player-container").classList.contains("hidden") || closePlayer()
     })), window.addEventListener("keydown", (function (e) {
         if (!document.getElementById("player-container").classList.contains("hidden")) {
+            var wasHidden = l.classList.contains("fade-out");
             d();
             var t = e.keyCode;
+
+            if (t === 13 && wasHidden) {
+                e.stopPropagation();
+                e.preventDefault();
+                return;
+            }
+
             if (415 === t || 19 === t || 179 === t || 13 === t) (13 === t && "BUTTON" !== document.activeElement.tagName || 13 !== t) && i.click();
             else if (412 === t || 37 === t) n.currentTime = Math.max(0, n.currentTime - 10);
             else if (417 === t || 39 === t) {
@@ -1039,7 +1047,7 @@ function playVideo(e) {
                 history.back();
             } else 461 !== t && 8 !== t && 27 !== t && 10009 !== t || e.preventDefault()
         }
-    })), i.addEventListener("click", (function () {
+    }), true), i.addEventListener("click", (function () {
         n.paused ? (n.play(), i.innerHTML = "&#9632;") : (n.pause(), i.innerHTML = "&#9654;", d())
     })), n.addEventListener("play", (function () {
         i.innerHTML = "&#9632;", d()
@@ -1062,6 +1070,10 @@ function playVideo(e) {
     }
     n.addEventListener("waiting", (function () {
         c.style.display = "block"
+    })), n.addEventListener("seeking", (function () {
+        c.style.display = "block"
+    })), n.addEventListener("seeked", (function () {
+        c.style.display = "none"
     })), n.addEventListener("playing", (function () {
         c.style.display = "none"
     })), n.addEventListener("canplay", (function () {
