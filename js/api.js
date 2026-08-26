@@ -237,17 +237,16 @@ var OdyseeAPI = function () {
                 var sec = data[key];
                 if (!sec || !(sec.channelIds || []).length) return t(new Error("Ismeretlen kategoria: " + key));
                 e("claim_search", {
-                    channel_ids: sec.channelIds,
+                    channel_ids: (sec.channelIds || []).slice(0, 50),
                     claim_type: ["stream"],
                     stream_types: ["video"],
                     page_size: 20,
                     page: page || 1,
-                    // Kulonben egy sokat tolto csatorna elarasztja a listat.
-                    limit_claims_per_channel: sec.channelLimit || 3,
-                    // NEM release_time! A legfrissebbet a tomegesen tolto,
-                    // c:unlisted-elt csatornak uraljak, azok viszont 401-et adnak.
-                    // Meres a Featured szekcion: release_time 0/20 lejatszhato,
-                    // trending 19/20, effective_amount 20/20.
+                    has_no_source: false,
+                    fee_amount: "<=0",
+                    duration: ">=60",
+                    not_tags: ["c:members-only", "c:unlisted", "c:rental", "c:purchase", "c:scheduled:show", "c:scheduled:hide"],
+                    limit_claims_per_channel: parseInt(sec.channelLimit || 3, 10),
                     order_by: ["trending_group", "trending_mixed"]
                 }, filterPlayable(t))
             })
@@ -259,6 +258,10 @@ var OdyseeAPI = function () {
                 stream_types: ["video"],
                 page_size: 20,
                 page: page || 1,
+                has_no_source: false,
+                fee_amount: "<=0",
+                duration: ">=60",
+                not_tags: ["c:members-only", "c:unlisted", "c:rental", "c:purchase", "c:scheduled:show", "c:scheduled:hide"],
                 order_by: ["trending_group", "trending_mixed"]
             }, filterPlayable(t))
         },
@@ -266,7 +269,7 @@ var OdyseeAPI = function () {
             var p = page || 1;
             console.log("OdyseeAPI: Searching lighthouse for: " + t);
             var n = new XMLHttpRequest,
-                s = "https://lighthouse.odysee.tv/search?s=" + encodeURIComponent(t) + "&size=20&from=" + ((p - 1) * 20) + "&claimType=file&mediaType=video";
+                s = "https://lighthouse.odysee.tv/search?s=" + encodeURIComponent(t) + "&size=20&from=" + ((p - 1) * 20) + "&claimType=file&mediaType=video&free_only=true";
             n.open("GET", s, !0), n.onreadystatechange = function () {
                 if (4 === n.readyState)
                     if (200 === n.status) try {
@@ -275,7 +278,11 @@ var OdyseeAPI = function () {
                             for (var s = [], o = 0; o < t.length; o++) s.push(t[o].claimId);
                             console.log("OdyseeAPI: Found " + s.length + " search results. Fetching metadata..."), e("claim_search", {
                                 claim_ids: s,
-                                page_size: 20
+                                page_size: 20,
+                                has_no_source: false,
+                                fee_amount: "<=0",
+                                duration: ">=60",
+                                not_tags: ["c:members-only", "c:unlisted", "c:rental", "c:purchase", "c:scheduled:show", "c:scheduled:hide"]
                             }, filterPlayable(function (e, t) {
                                 if (e) return r(e);
                                 if (t && t.items) {

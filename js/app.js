@@ -935,20 +935,12 @@ function playVideo(e) {
     function n(e, t) {
         var n = Array.prototype.slice.call(t).map((function (e) {
             return "object" == typeof e ? JSON.stringify(e) : e
-        })).join(" "),
-            i = document.getElementById("debug-console");
+        })).join(" ");
         // Ugyanaz a szoveg megy a dev szerverre is, ha be van kotve a devlog.js.
         // A try/catch azert kell, hogy a naplozas soha ne dontse el az appot.
         try {
             if ("undefined" != typeof RemoteLog) RemoteLog.push(e, n)
         } catch (err) { }
-        if (i) {
-            var o = document.createElement("div");
-            o.style.color = "error" === e ? "#f00" : "#0f0", o.style.marginBottom = "4px", o.style.borderBottom = "1px solid #333", o.style.wordWrap = "break-word";
-            var a = new Date,
-                r = a.getHours() + ":" + a.getMinutes() + ":" + a.getSeconds() + "." + a.getMilliseconds();
-            o.textContent = "[" + r + "] " + e.toUpperCase() + ": " + n, i.appendChild(o), i.scrollTop = i.scrollHeight
-        }
     }
     console.log = function () {
         n("log", arguments), e.apply(console, arguments)
@@ -993,14 +985,6 @@ function playVideo(e) {
             }, 300);
         });
     }
-
-    // RED gomb: debug konzol ki/be. Eddig allandoan takarta a kepernyo jobb oldalat.
-    window.addEventListener("keydown", function (ev) {
-        if (403 === ev.keyCode) {
-            var dc = document.getElementById("debug-console");
-            if (dc) dc.style.display = ("none" === dc.style.display ? "block" : "none")
-        }
-    });
 })), document.addEventListener("DOMContentLoaded", (function () {
     var e, t = document.getElementById("player-container"),
         n = document.getElementById("video-player"),
