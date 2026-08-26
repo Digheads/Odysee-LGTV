@@ -1,12 +1,13 @@
 {
     "id": "com.odysee.lgtv",
-    "version": "1.0.160",
+    "version": "1.0.164",
     "vendor": "Odysee",
     "type": "web",
     "main": "index.html",
     "title": "Odysee",
     "icon": "icons/icon.png",
     "largeIcon": "icons/largeIcon.png",
+    "splashBackground": "icons/largeIcon.png",
     "bgColor": "#000000",
     "resolution": "1920x1080"
 }

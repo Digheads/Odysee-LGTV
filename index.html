@@ -31,10 +31,12 @@
             <header class="top-header">
                 <h1 id="page-title">Home</h1>
                 <div id="search-container" style="display: none; margin-top: 20px;">
-                    <input type="text" id="search-input" class="focusable search-input" placeholder="Keresés..."
+                    <input type="text" id="search-input" class="focusable search-input" placeholder="Search..."
+                        data-sn-right="#btn-search" data-sn-down="#video-grid .video-card:first-child"
                         style="-webkit-flex: 1; flex: 1; margin-right: 20px; padding: 15px; font-size: 24px; border-radius: 12px; border: 2px solid transparent; background: #2A2D35; color: white;" />
                     <button id="btn-search" class="focusable btn-search"
-                        style="padding: 15px 40px; font-size: 24px; border-radius: 12px; background: #E2225E; color: white; border: 2px solid transparent; cursor: pointer;">Keresés</button>
+                        data-sn-left="#search-input" data-sn-down="#video-grid .video-card:first-child"
+                        style="padding: 15px 40px; font-size: 24px; border-radius: 12px; background: #E2225E; color: white; border: 2px solid transparent; cursor: pointer;">Search</button>
                 </div>
             </header>
 

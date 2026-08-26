@@ -555,6 +555,7 @@ var currentCategory = 'nav-home';
 var currentSearchQuery = '';
 var isLoading = false;
 var hasMore = true;
+var isAppStartup = true;
 
 function loadPage(e) {
     var t = document.getElementById("video-grid"),
@@ -601,7 +602,19 @@ function loadPage(e) {
         } else {
             hasMore = false;
         }
-        SpatialNavigation.refresh()
+        SpatialNavigation.refresh();
+        if (currentPage === 1) {
+            setTimeout((function () {
+                if (typeof isAppStartup !== "undefined" && isAppStartup) {
+                    isAppStartup = false;
+                    var activeMenu = document.querySelector(".nav-item.active");
+                    if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                } else {
+                    var firstVideo = t.querySelector(".video-card");
+                    if (firstVideo) SpatialNavigation.focusNode(firstVideo);
+                }
+            }), 100);
+        }
     }
     o.style.display = "none";
     i.innerText = sectionLabel(e);
@@ -996,10 +1009,34 @@ function playVideo(e) {
     bindNav();
     var n = document.getElementById("btn-search"),
         i = document.getElementById("search-input");
-    n && i && n.addEventListener("click", (function () {
+    
+    function triggerSearch() {
+        if (!i) return;
         var e = i.value.trim();
-        e.length > 0 && doSearch(e)
-    }))
+        if (e.length > 0) {
+            i.blur(); // Hide virtual keyboard
+            var btn = document.getElementById("btn-search");
+            if (btn) SpatialNavigation.focusNode(btn); // Prevent auto-refocus on input
+            doSearch(e);
+        }
+    }
+
+    if (n && i) {
+        n.addEventListener("click", triggerSearch);
+        
+        i.addEventListener("keydown", function(e) {
+            if (e.keyCode === 13) {
+                e.preventDefault();
+                triggerSearch();
+            }
+        });
+
+        // When the magic remote clicks the input, or virtual keyboard opens,
+        // force Spatial Navigation to keep focus on the input instead of falling back to sidebar.
+        i.addEventListener("focus", function() {
+            SpatialNavigation.focusNode(i);
+        });
+    }
 
     var mainContent = document.getElementById("main-content");
     if (mainContent) {
