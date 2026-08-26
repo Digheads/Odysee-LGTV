@@ -1027,6 +1027,7 @@ function playVideo(e) {
         document.getElementById("player-container").classList.contains("hidden") || closePlayer()
     })), window.addEventListener("keydown", (function (e) {
         if (!document.getElementById("player-container").classList.contains("hidden")) {
+            e.stopPropagation();
             var wasHidden = l.classList.contains("fade-out");
             d();
             var t = e.keyCode;
