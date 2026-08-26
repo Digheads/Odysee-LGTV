@@ -165,7 +165,7 @@ function setSources(video, list) {
         if (list[k].type) s.setAttribute("type", list[k].type);
         video.appendChild(s);
         console.log("  forras " + (k + 1) + ": " + (list[k].type || "tipus nelkul") +
-            " -> " + list[k].url.substring(0, 78));
+            " -> " + list[k].url);
     }
 }
 
@@ -902,6 +902,8 @@ function playVideo(e) {
                     if (hls) {
                         hadHls = true;
                         playReason = "HLS + mp4 fallback, explicit type";
+                        i.dataset.rawUrl = rawUrl;
+                        i.dataset.useMagic = useMagic ? "true" : "false";
                         return void r(buildPlayableUrl(rawUrl, useMagic), {
                             url: hls,
                             type: MIME_HLS
@@ -913,13 +915,19 @@ function playVideo(e) {
                     return void setTimeout(warm, 3000);
                 }
                 playReason = useMagic ? "original mp4, with magic" : "original mp4, without query (cacheable)";
+                i.dataset.rawUrl = rawUrl;
+                i.dataset.useMagic = useMagic ? "true" : "false";
                 r(buildPlayableUrl(rawUrl, useMagic))
             };
             xhr.ontimeout = xhr.onerror = function () {
                 if (retries < maxRetries) {
                     retries++;
                     setTimeout(warm, 3000)
-                } else r(buildPlayableUrl(rawUrl, useMagic))
+                } else {
+                    i.dataset.rawUrl = rawUrl;
+                    i.dataset.useMagic = useMagic ? "true" : "false";
+                    r(buildPlayableUrl(rawUrl, useMagic))
+                }
             };
             xhr.send()
         }
@@ -1053,9 +1061,13 @@ function playVideo(e) {
     })), n.addEventListener("play", (function () {
         i.innerHTML = "&#9632;", d()
     })), n.addEventListener("pause", (function () {
-        i.innerHTML = "&#9654;", d()
+        i.innerHTML = "&#9654;", d();
+        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
     }));
-    var c = document.getElementById("player-loading");
+    var c = document.getElementById("player-loading"),
+        watchdogTimer = null,
+        lastTime = 0,
+        stuckCount = 0;
 
     function u(e, total) {
         if (isNaN(e)) return "00:00";
@@ -1076,18 +1088,68 @@ function playVideo(e) {
     })), n.addEventListener("seeked", (function () {
         c.style.display = "none"
     })), n.addEventListener("playing", (function () {
-        c.style.display = "none"
+        c.style.display = "none";
+        if (watchdogTimer) clearInterval(watchdogTimer);
+        lastTime = n.currentTime;
+        stuckCount = 0;
+        var isBufferingAllowed = true; // initially true for startup
+        n.addEventListener("seeking", function() { isBufferingAllowed = true; });
+        watchdogTimer = setInterval(function() {
+            if (!n.paused && !n.ended) {
+                if (n.seeking) {
+                    stuckCount = 0;
+                    lastTime = n.currentTime;
+                    return;
+                }
+                var current = n.currentTime;
+                if (Math.abs(current - lastTime) < 0.1) {
+                    stuckCount++;
+                    var limit = isBufferingAllowed ? 60 : 4; // 30s for seek/start, 2s for normal playback
+                    if (stuckCount >= limit) {
+                        console.log("Watchdog: video stalled for " + (limit/2) + " seconds, auto-reconnecting!");
+                        var raw = n.dataset.rawUrl;
+                        var useM = n.dataset.useMagic === "true";
+                        if (raw) {
+                            var newUrl = buildPlayableUrl(raw, useM);
+                            console.log("Watchdog: fresh URL -> " + newUrl);
+                            var savedTime = n.currentTime;
+                            isBufferingAllowed = true;
+                            n.pause();
+                            setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                            n.load();
+                            var onReady = function() {
+                                try { n.currentTime = savedTime; } catch(e) {}
+                                n.play();
+                                n.removeEventListener("canplay", onReady);
+                            };
+                            n.addEventListener("canplay", onReady);
+                        } else {
+                            n.pause();
+                            n.play();
+                        }
+                        stuckCount = 0;
+                    }
+                } else {
+                    stuckCount = 0;
+                    lastTime = current;
+                    isBufferingAllowed = false; // it is progressing, so future stalls are unexpected
+                }
+            }
+        }, 500);
     })), n.addEventListener("canplay", (function () {
         c.style.display = "none";
+        var errEl = document.getElementById("player-error");
+        if (errEl) errEl.style.display = "none";
         // Positive feedback: until now we could only infer from the LACK of an error
         // whether it started. currentSrc shows which <source> won --
         // this decides whether the HLS or the mp4 source was selected.
         clearStall();
         console.log("PLAYABLE. Player selected: " +
-            (n.currentSrc || "(unknown)").substring(0, 95))
+            (n.currentSrc || "(unknown)"))
     })), n.addEventListener("error", (function () {
         c.style.display = "none"
     })), n.addEventListener("ended", (function () {
+        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
         closePlayer()
     })), n.addEventListener("timeupdate", (function () {
         var e = n.currentTime || 0,
