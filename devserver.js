@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Fejlesztoi szerver az OdyseeLGTV-hez. Nincs fuggosege.
+// Development server for OdyseeLGTV. No dependencies.
 //
 //   node devserver.js [port]
 //
-// Ketto dolgot csinal:
-//   1. Kiszolgalja a projektet statikusan -> a TV-n http://<ip>:<port>/ a cim,
-//      igy nem kell ujracsomagolni minden apro valtoztatas utan.
-//   2. Fogadja a POST /log kereseket -> a TV konzolja ide folyik, a terminalba
-//      es a devlog.txt-be.
+// It does two things:
+//   1. Serves the project statically -> the URL on the TV is http://<ip>:<port>/,
+//      so there is no need to repackage after every small change.
+//   2. Accepts POST /log requests -> the TV's console output flows here, into the terminal
+//      and into devlog.txt.
 
 var http = require("http"),
     fs = require("fs"),
@@ -50,7 +50,7 @@ function stamp() {
     return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()) + "." + p(d.getMilliseconds(), 3);
 }
 
-// Kiemeles, hogy a lenyeg kiugorjon a zajbol.
+// Highlighting to make the essentials pop out from the noise.
 function colorize(level, msg) {
     if (level === "error") return C.red + msg + C.reset;
     if (/\bcache=HIT\b/.test(msg)) return C.green + msg + C.reset;
@@ -110,7 +110,7 @@ function serveStatic(req, res, urlPath) {
         cors(res);
         res.writeHead(200, {
             "Content-Type": MIME[path.extname(file).toLowerCase()] || "application/octet-stream",
-            // A TV agresszivan cache-el; fejlesztes kozben ez utban van.
+            // The TV caches aggressively; this is in the way during development.
             "Cache-Control": "no-store, no-cache, must-revalidate"
         });
         res.end(data);
@@ -139,13 +139,13 @@ http.createServer(function (req, res) {
             if (a.family === "IPv4" && !a.internal) addrs.push(a.address);
         });
     });
-    console.log(C.green + "OdyseeLGTV dev szerver fut a " + PORT + " porton" + C.reset);
+    console.log(C.green + "OdyseeLGTV dev server is running on port " + PORT + C.reset);
     console.log(C.dim + "log -> " + LOGFILE + C.reset);
     console.log("");
-    if (!addrs.length) console.log(C.yellow + "Nem talaltam LAN cimet." + C.reset);
+    if (!addrs.length) console.log(C.yellow + "No LAN address found." + C.reset);
     addrs.forEach(function (a) {
-        console.log("  TV-n nyisd meg:   " + C.cyan + "http://" + a + ":" + PORT + "/" + C.reset);
-        console.log("  file://-bol:      " + C.grey + 'window.DEVLOG_HOST = "' + a + ":" + PORT + '"' + C.reset);
+        console.log("  Open on TV:       " + C.cyan + "http://" + a + ":" + PORT + "/" + C.reset);
+        console.log("  from file://:     " + C.grey + 'window.DEVLOG_HOST = "' + a + ":" + PORT + '"' + C.reset);
     });
     console.log("");
 });
