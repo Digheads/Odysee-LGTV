@@ -141,13 +141,6 @@ function createVideoCard(e) {
     o.className = "video-card focusable";
     o.innerHTML = '<div class="thumbnail-wrapper"><img class="thumbnail" src="' + n + '" /></div><div class="info"><div class="title">' + t + '</div><div class="channel">' + i + '</div><div class="card-date">' + uploadDate + '</div></div>';
     
-    var debugConsole = document.getElementById("debug-console");
-    if (debugConsole) {
-        var log = document.createElement("div");
-        log.innerText = "DOM: " + o.innerHTML;
-        debugConsole.appendChild(log);
-    }
-    
     return o.addEventListener("click", (function () {
         window.lastFocusedCard = o;
         playVideo(e)
@@ -183,35 +176,81 @@ function playVideo(e) {
     document.getElementById("meta-date").innerHTML = uploadDate ? clockSvg + uploadDate : "";
     document.getElementById("meta-views").innerHTML = "";
     document.getElementById("meta-reactions").innerHTML = "";
+    document.getElementById("time-display").textContent = "00:00 / 00:00";
+    document.getElementById("progress-fill").style.width = "0%";
 
-    if (e.claim_id) {
+    var eyeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
+    if (e._cached_views !== undefined) {
+        document.getElementById("meta-views").innerHTML = eyeSvg + e._cached_views;
+    } else if (e.claim_id) {
         OdyseeAPI.getViewCount(e.claim_id, function (err, views) {
             if (!err) {
-                var eyeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
+                e._cached_views = views;
                 document.getElementById("meta-views").innerHTML = eyeSvg + views;
             }
         });
+    }
+    var likeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M2 20h2c.55 0 1-.45 1-1v-9c0-.55-.45-1-1-1H2v11zm19.83-7.12c.11-.25.17-.52.17-.8V11c0-1.1-.9-2-2-2h-5.98l1.24-5.22.04-.32c0-.41-.17-.79-.44-1.06L14.28 1 8.14 7.55C7.81 7.89 7.6 8.35 7.6 8.85V19c0 1.1.9 2 2 2h7.97c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-.12z"/></svg>';
+    var dislikeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-left: 12px; margin-right: 4px;"><path d="M22 4h-2c-.55 0-1 .45-1 1v9c0 .55.45 1 1 1h2V4zM2.17 11.12c-.11.25-.17.52-.17.8V13c0 1.1.9 2 2 2h5.98l-1.24 5.22-.04.32c0 .41.17.79.44 1.06L9.72 23l6.14-6.55c.33-.34.54-.8.54-1.3V5c0-1.1-.9-2-2-2H6.43c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v.12z"/></svg>';
+    if (e._cached_reactions) {
+        document.getElementById("meta-reactions").innerHTML = likeSvg + (e._cached_reactions.like || 0) + dislikeSvg + (e._cached_reactions.dislike || 0);
+    } else if (e.claim_id) {
         OdyseeAPI.getReactions(e.claim_id, function (err, reactions) {
             if (!err && reactions) {
-                var likeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M2 20h2c.55 0 1-.45 1-1v-9c0-.55-.45-1-1-1H2v11zm19.83-7.12c.11-.25.17-.52.17-.8V11c0-1.1-.9-2-2-2h-5.98l1.24-5.22.04-.32c0-.41-.17-.79-.44-1.06L14.28 1 8.14 7.55C7.81 7.89 7.6 8.35 7.6 8.85V19c0 1.1.9 2 2 2h7.97c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-.12z"/></svg>';
-                var dislikeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-left: 12px; margin-right: 4px;"><path d="M22 4h-2c-.55 0-1 .45-1 1v9c0 .55.45 1 1 1h2V4zM2.17 11.12c-.11.25-.17.52-.17.8V13c0 1.1.9 2 2 2h5.98l-1.24 5.22-.04.32c0 .41.17.79.44 1.06L9.72 23l6.14-6.55c.33-.34.54-.8.54-1.3V5c0-1.1-.9-2-2-2H6.43c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v.12z"/></svg>';
+                e._cached_reactions = reactions;
                 document.getElementById("meta-reactions").innerHTML = likeSvg + (reactions.like || 0) + dislikeSvg + (reactions.dislike || 0);
             }
         });
     }
 
-    i.setAttribute("data-duration", t), i.innerHTML = "", i.src = "", a.textContent = e.value.title || "Unknown Title", n.classList.remove("hidden"), o.style.display = "block", OdyseeAPI.getStreamingSourceUrl(e, (function (t, n) {
-        if (!t && n) r(n);
-        else {
-            console.error("Failed to get stream URL via get method.", t);
-            var i = e.value && e.value.source ? e.value.source.sd_hash : "",
-                a = e.claim_id;
-            if (i && a) {
-                var l = "http://player.odycdn.com/v6/streams/" + a + "/" + i.substring(0, 6) + ".mp4";
-                console.log("Using assembled MP4 fallback: " + l), r(l)
-            } else o.style.display = "none"
+    i.setAttribute("data-duration", t), i.innerHTML = "", i.src = "", a.textContent = e.value.title || "Unknown Title", n.classList.remove("hidden"), o.style.display = "block";
+    
+    function startVideoWithWarmup(url) {
+        var retries = 0;
+        var maxRetries = 10;
+        function checkCache() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("HEAD", url, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 503 && retries < maxRetries) {
+                        retries++;
+                        console.log("CDN returned 503. Warming cache... Retry " + retries);
+                        setTimeout(checkCache, 3000);
+                    } else {
+                        console.log("CDN cache warm or terminal status: " + xhr.status + ". Starting video.");
+                        r(url);
+                    }
+                }
+            };
+            xhr.onerror = function () {
+                if (retries < maxRetries) {
+                    retries++;
+                    setTimeout(checkCache, 3000);
+                } else {
+                    r(url);
+                }
+            };
+            xhr.send();
         }
-    })), history.pushState({
+        checkCache();
+    }
+
+    OdyseeAPI.getStreamingSourceUrl(e, (function (t, n) {
+        if (!t && n) {
+            startVideoWithWarmup(n);
+        } else {
+            console.error("Failed to get stream URL via get method.", t);
+            var sd = e.value && e.value.source ? e.value.source.sd_hash : "";
+            var cid = e.claim_id;
+            if (sd && cid) {
+                var l = "http://player.odycdn.com/v6/streams/" + cid + "/" + sd.substring(0, 6) + ".mp4";
+                console.log("Using assembled MP4 fallback: " + l);
+                startVideoWithWarmup(l);
+            } else o.style.display = "none";
+        }
+    }));
+    history.pushState({
         playerOpen: !0
     }, "player"), setTimeout((function () {
         SpatialNavigation.refresh();
@@ -295,6 +334,9 @@ function playVideo(e) {
             else if (417 === t || 39 === t) {
                 var o = isNaN(n.duration) ? n.currentTime + 10 + 100 : n.duration;
                 n.currentTime = Math.min(o, n.currentTime + 10)
+            } else if (413 === t) {
+                e.preventDefault();
+                history.back();
             } else 461 !== t && 8 !== t && 27 !== t && 10009 !== t || e.preventDefault()
         }
     })), i.addEventListener("click", (function () {

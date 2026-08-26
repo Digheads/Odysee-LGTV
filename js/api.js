@@ -34,7 +34,7 @@ var OdyseeAPI = function () {
                             stream_types: ["video"],
                             page_size: 20,
                             page: page || 1,
-                            order_by: ["trending_group", "trending_mixed"]
+                            order_by: ["release_time"]
                         }, t)
                     } catch (e) {
                         t(e)
@@ -84,14 +84,13 @@ var OdyseeAPI = function () {
         getStreamingSourceUrl: function (t, r) {
             if (-1 !== (t.value && t.value.tags ? t.value.tags : []).indexOf("c:members-only")) return r(new Error("This content is for members only. Please log in with an account that has an active membership."));
             e("get", {
-                uri: t.short_url,
-                environment: "live"
+                uri: t.short_url
             }, (function (e, t) {
                 if (e) return r(e);
                 if (t && t.streaming_url) {
                     var n = t.streaming_url.replace(/^https:/i, "http:");
                     console.log("OdyseeAPI: Stream URL resolved: " + n), r(null, n)
-                } else r(new Error("No streaming_url returned"))
+                } else r(new Error("No streaming_url returned"));
             }))
         },
         getReactions: function (claimId, callback) {
