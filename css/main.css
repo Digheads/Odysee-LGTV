@@ -12,7 +12,8 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: #000000;
     color: #FFFFFF;
-    overflow: hidden; /* TV apps usually don't have body scroll */
+    overflow: hidden;
+    /* TV apps usually don't have body scroll */
     width: 1920px;
     height: 1080px;
 }
@@ -31,7 +32,7 @@ body {
     width: 320px;
     height: 1080px;
     background: #121212;
-    border-right: 1px solid rgba(255,255,255,0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
     padding: 60px 0;
     z-index: 10;
 }
@@ -50,6 +51,16 @@ body {
 .nav-links {
     list-style: none;
     padding: 0 20px;
+    /* 17+ kategoria nem fer ki 1080px-re -> gorgetheto.
+       A position: relative kell, hogy a nav-item offsetTop-ja ehhez a
+       konteherhez viszonyuljon (a spatial navigacio ezt hasznalja). */
+    position: relative;
+    max-height: 760px;
+    overflow-y: auto;
+}
+
+.nav-links::-webkit-scrollbar {
+    display: none;
 }
 
 .nav-item {
@@ -69,6 +80,7 @@ body {
 .nav-item.focused {
     background: linear-gradient(135deg, #E2225E 0%, #FF4B72 100%);
     color: #fff;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
     box-shadow: 0 10px 30px #E2225E;
 }
@@ -100,6 +112,7 @@ body {
     overflow-y: auto;
     padding-bottom: 60px;
     padding-right: 20px;
+    -webkit-flex: 1;
     flex: 1;
     font-size: 0;
 }
@@ -136,7 +149,8 @@ body {
 .video-card .thumbnail-wrapper {
     width: 100%;
     position: relative;
-    padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+    padding-bottom: 56.25%;
+    /* 16:9 Aspect Ratio */
     border-radius: 12px;
     overflow: hidden;
 }
@@ -154,8 +168,11 @@ body {
 
 .video-card .info {
     padding: 12px 0;
+    -webkit-flex: 1;
     flex: 1;
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
 }
 
@@ -168,7 +185,8 @@ body {
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.4;
-    height: 51px; /* Force exactly 2 lines height to prevent float snags */
+    height: 51px;
+    /* Force exactly 2 lines height to prevent float snags */
     color: #e5e7eb;
 }
 
@@ -185,6 +203,7 @@ body {
 }
 
 .video-card.focused {
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
     border-color: #E2225E;
     box-shadow: 0 10px 30px rgba(226, 34, 94, 0.2);
@@ -219,13 +238,23 @@ body {
 }
 
 @-webkit-keyframes spin {
-    0% { -webkit-transform: translate(-50%, -50%) rotate(0deg); }
-    100% { -webkit-transform: translate(-50%, -50%) rotate(360deg); }
+    0% {
+        -webkit-transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    100% {
+        -webkit-transform: translate(-50%, -50%) rotate(360deg);
+    }
 }
 
 @keyframes spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
+    0% {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
 }
 
 /* Player Title */
@@ -235,12 +264,12 @@ body {
     left: 0;
     width: 100%;
     padding: 40px 60px;
-    background: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent);
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent);
     color: white;
     font-size: 42px;
     font-weight: 600;
     z-index: 101;
-    text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
     transition: opacity 0.3s ease;
     white-space: nowrap;
     overflow: hidden;
@@ -259,7 +288,9 @@ body {
     height: 100%;
     background: #000;
     z-index: 100;
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
 }
 
@@ -278,9 +309,11 @@ body {
     bottom: 0;
     left: 0;
     width: 100%;
-    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
     padding: 40px 60px;
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
     z-index: 101;
     transition: opacity 0.3s ease;
@@ -298,7 +331,7 @@ body {
 .progress-bar {
     width: 100%;
     height: 8px;
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -316,10 +349,13 @@ body {
     text-align: center;
 }
 
-.seeker-bottom-row, .seeker-info-row {
+.seeker-bottom-row,
+.seeker-info-row {
     width: 100%;
 }
-.seeker-bottom-row::after, .seeker-info-row::after {
+
+.seeker-bottom-row::after,
+.seeker-info-row::after {
     content: "";
     display: table;
     clear: both;
@@ -328,6 +364,7 @@ body {
 .seeker-bottom-row {
     margin-top: 12px;
 }
+
 .seeker-info-row {
     margin-bottom: 12px;
 }
@@ -357,7 +394,7 @@ body {
 }
 
 .btn-player {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     color: white;
     border: 2px solid transparent;
     padding: 15px 40px;
@@ -372,5 +409,6 @@ body {
 .btn-player.focused {
     border-color: #E2225E;
     background: rgba(247, 10, 141, 0.2);
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }

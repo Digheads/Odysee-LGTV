@@ -1,0 +1,90 @@
+[15:12:15.624] LOG Ora-szinkron: eltolas 1 mp (TV ora kesik)
+[15:12:17.632] LOG OdyseeAPI: 15 kategoria
+[15:12:17.632] LOG OdyseeAPI: Starting request to https://api.na-backend.odysee.com/api/v1/proxy
+[15:12:20.738] LOG Kiszurve 2/20 vedett claim
+[15:12:25.502] LOG OdyseeAPI: stream URL (v4): http://player.odycdn.com/api/v4/streams/free/4418%EF%BD%9C%E9%95%B7%E5%B0%BAPremiumOS%E3%80%80Premium%E8%A6%96%E8%81%B4%E6%99%82%E9%96%93%E3%81%8C%E5%8F%8E%E7%9B%8A%E3%81%AE%E6%A0%B8%E3%81%AB%E3%81%AA%E3%82%8B%E6%99%82%E4%BB%A3%E3%81%AB%E3%80%81%E8%AA%AD%E8%80%85%E3%81%8C%E9%95%B7%E5%B0%BA%E3%81%A7%E4%B8%96%E7%95%8C%E8%A6%B3%E3%82%92%E7%AB%8B%E3%81%A1%E4%B8%8A%E3%81%92%E3%82%8B%E5%85%B7%E4%BD%93%E7%9A%84%E3%81%AA%E6%92%AE%E5%BD%B1%E3%83%BB%E6%A7%8B%E9%80%A0%E5%8C%96%E6%89%8B%E9%A0%86/71bd8bd7fef5547bc02a194f3620079320c54ba4/6fa043
+[15:12:25.502] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:12:25.502] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:12:27.492] LOG Warmup 200 cache=MISS [magic] r=0
+[15:12:27.493] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/api/v4/streams/free/4418%EF%BD%9C%E9%95%B7%E5%B0%BAPremiumOS%E3%80%80Premium%E8%A6%96%E8%81%B4%E6%99%82%E9%96%93%E3%81%8C%E5%8F%8E%E7%9B%8A%E3%81%AE%E6%A0%B8%E3%81%AB%E3%81%AA%E3%82%8B%E6%99%82%E4%BB%A3%E3%81%AB%E3%80%81%E8%AA%AD%E8%80%85%E3%81%8C%E9%95%B7%E5%B0%BA%E3%81%A7%E4%B8%96%E7%95%8C%E8%A6%B3%E3%82%92%E7%AB%8B%E3%81%A1%E4%B8%8A%E3%81%92%E3%82%8B%E5%85%B7%E4%BD%93%E7%9A%84%E3%81%AA%E6%92%AE%E5%BD%B1%E3%83%BB%E6%A7%8B%E9%80%A0%E5%8C%96%E6%89%8B%E9%A0%86/71bd8bd7fef5547bc02a194f3620079320c54ba4/6fa043?magic=1787749988
+[15:12:50.982] LOG OdyseeAPI: stream URL (v4): http://player.odycdn.com/api/v4/streams/free/%F0%9F%87%AC%F0%9F%87%A7-%F0%9F%87%AA%F0%9F%87%A6-%F0%9F%8E%B6-sophia-2/3e6352a71f668d9c06df71e9ad522050d83d5fc0/b374ed
+[15:12:50.982] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:12:50.983] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:12:52.908] LOG Warmup 200 cache=MISS [magic] r=0
+[15:12:52.908] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/api/v4/streams/free/%F0%9F%87%AC%F0%9F%87%A7-%F0%9F%87%AA%F0%9F%87%A6-%F0%9F%8E%B6-sophia-2/3e6352a71f668d9c06df71e9ad522050d83d5fc0/b374ed?magic=1787750014
+[15:13:02.902] LOG OdyseeAPI: stream URL (v4): http://player.odycdn.com/api/v4/streams/free/%F0%9F%87%AC%F0%9F%87%A7-%F0%9F%87%AA%F0%9F%87%A6-%F0%9F%8E%B6-sophia-3/58a103ab4c1171374f4383831287d6484957a084/61fff6
+[15:13:02.903] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:13:02.903] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:13:03.755] LOG Warmup 200 cache=MISS [magic] r=0
+[15:13:03.756] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/api/v4/streams/free/%F0%9F%87%AC%F0%9F%87%A7-%F0%9F%87%AA%F0%9F%87%A6-%F0%9F%8E%B6-sophia-3/58a103ab4c1171374f4383831287d6484957a084/61fff6?magic=1787750025
+[15:13:13.692] LOG OdyseeAPI: stream URL (v4): http://player.odycdn.com/api/v4/streams/free/target-pulls-%E2%80%9Cracist-costume%2C%E2%80%9D-after/62a924814d5dbc8241e7ebe92d125b731bc2de4c/681a2c
+[15:13:13.692] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:13:13.692] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:13:15.203] LOG Warmup 200 cache=MISS [magic] r=0
+[15:13:15.204] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/api/v4/streams/free/target-pulls-%E2%80%9Cracist-costume%2C%E2%80%9D-after/62a924814d5dbc8241e7ebe92d125b731bc2de4c/681a2c?magic=1787750036
+[15:13:30.413] LOG OdyseeAPI: Starting request to https://api.na-backend.odysee.com/api/v1/proxy
+[15:13:33.625] LOG OdyseeAPI: stream URL (v4): http://player.odycdn.com/api/v4/streams/free/JJK-SEASON-3-WILL-BREAK-THE-INTERNET/a7437963edf902826276b9c5e81b3e3424b15fd1/288874
+[15:13:33.625] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:13:33.626] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:13:34.482] LOG Warmup 200 cache=MISS [magic] r=0
+[15:13:34.482] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/api/v4/streams/free/JJK-SEASON-3-WILL-BREAK-THE-INTERNET/a7437963edf902826276b9c5e81b3e3424b15fd1/288874?magic=1787750055
+[15:13:37.411] ERR Video hiba 4: Nem tamogatott forras (MEDIA_ERR_SRC_NOT_SUPPORTED).
+[15:13:38.082] LOG VISSZAESES OKA: a(z) v4 forras 4-as hibaval bukott -> nyers mp4: http://player.odycdn.com/v6/streams/a7437963edf902826276b9c5e81b3e3424b15fd1/288874.mp4
+[15:13:38.082] LOG LEJATSZAS INDUL [nyers mp4 fallback (elozo forras hibakod: 4)]: http://player.odycdn.com/v6/streams/a7437963edf902826276b9c5e81b3e3424b15fd1/288874.mp4
+[15:13:38.082] LOG [mp4-proba] HTTP 401  ct=text/plain; charset=x-user-defined  len=45
+[15:13:38.082] LOG [mp4-proba] byte: 74 68 69 73 20 63 6f 6e 74 65 6e 74 20 63 61 6e 
+[15:13:38.082] LOG [mp4-proba] >>> SZOVEG -> NEM media: "this content cannot be accessed at the moment"
+[15:13:38.303] ERR Video hiba 4: Nem tamogatott forras (MEDIA_ERR_SRC_NOT_SUPPORTED).
+[15:13:39.206] LOG [vegso-proba] HTTP 401  ct=text/plain; charset=x-user-defined  len=45
+[15:13:39.206] LOG [vegso-proba] byte: 74 68 69 73 20 63 6f 6e 74 65 6e 74 20 63 61 6e 
+[15:13:39.206] LOG [vegso-proba] >>> SZOVEG -> NEM media: "this content cannot be accessed at the moment"
+[15:13:39.206] LOG Transcode-sorbaallitas: 200
+[15:17:41.914] LOG Ora-szinkron: eltolas 1 mp (TV ora kesik)
+[15:17:41.915] LOG OdyseeAPI: 15 kategoria
+[15:17:41.915] LOG OdyseeAPI: Starting request to https://api.na-backend.odysee.com/api/v1/proxy
+[15:17:48.785] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/ec4e8c7a2d5ff26a07ae9aac33cbae2c6688bb10/ca64e1.mp4
+[15:17:48.785] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:17:48.785] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:17:48.785] LOG Warmup 200 cache=MISS [magic] r=0
+[15:17:48.786] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/v6/streams/ec4e8c7a2d5ff26a07ae9aac33cbae2c6688bb10/ca64e1.mp4?magic=1787750310
+[15:18:26.550] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/31658102c37393fb97c07f0fb8f3443d6f6ff21c/53651e.mp4
+[15:18:26.550] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:18:26.550] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:18:26.550] LOG Warmup 308 cache=MISS [magic] r=0
+[15:18:26.550] LOG LEJATSZAS INDUL [HLS (308, van kesz transcode)]: http://player.odycdn.com/api/v4/streams/tc/Sulforaphane/31658102c37393fb97c07f0fb8f3443d6f6ff21c/53651e910feeea1f26f620034ea45a4f2644e7a9a77bc9844f0faf944859352524548a4f57719bc6b53e209dc37b9fd2/master.m3u8?magic=1787750347
+[15:18:26.550] LOG [HLS-proba] HTTP 206  ct=text/plain; charset=x-user-defined  len=489
+[15:18:26.550] LOG [HLS-proba] byte: 23 45 58 54 4d 33 55 0a 23 45 58 54 2d 58 2d 56 
+[15:18:26.550] LOG [HLS-proba] >>> HLS playlist (m3u8)
+[15:18:26.550] LOG [HLS-proba] playlist: #EXTM3U | #EXT-X-VERSION:6 | #EXT-X-STREAM-INF:BANDWIDTH=4026000,RESOLUTION=1920x1080,CODECS="avc1.4d4028,mp4a.40.2",CLOSED-CAPTIONS=NONE | v0.m3u8 |  | #EXT-X-STREAM-INF:BANDWIDTH=2890800,RESOLUTION=1280x720,CODECS="avc1.4d401f,m
+[15:18:26.771] ERR Video hiba 4: Nem tamogatott forras (MEDIA_ERR_SRC_NOT_SUPPORTED).
+[15:18:27.402] LOG VISSZAESES OKA: a(z) HLS forras 4-as hibaval bukott -> nyers mp4: http://player.odycdn.com/v6/streams/31658102c37393fb97c07f0fb8f3443d6f6ff21c/53651e.mp4
+[15:18:27.402] LOG LEJATSZAS INDUL [nyers mp4 fallback (elozo forras hibakod: 4)]: http://player.odycdn.com/v6/streams/31658102c37393fb97c07f0fb8f3443d6f6ff21c/53651e.mp4?magic=1787750348
+[15:18:27.402] LOG [mp4-proba] HTTP 206  ct=text/plain; charset=x-user-defined  len=1024
+[15:18:27.402] LOG [mp4-proba] byte: 00 00 00 18 66 74 79 70 6d 70 34 32 00 00 00 00 
+[15:18:27.402] LOG [mp4-proba] >>> MP4 (ftyp box) - ervenyes media
+[15:18:48.476] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/9bbda2df11093ee7ce10d30440f0f45b96def17c/f164d7.mp4
+[15:18:48.476] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:18:48.476] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:18:50.949] LOG Warmup 200 cache=MISS [magic] r=0
+[15:18:50.949] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/v6/streams/9bbda2df11093ee7ce10d30440f0f45b96def17c/f164d7.mp4?magic=1787750372
+[15:19:01.600] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/f4363638e2784c8d91b47f7e77132f86bd4939c0/576dbc.mp4
+[15:19:01.600] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:19:01.601] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:19:02.721] LOG Warmup 200 cache=MISS [magic] r=0
+[15:19:02.721] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/v6/streams/f4363638e2784c8d91b47f7e77132f86bd4939c0/576dbc.mp4?magic=1787750383
+[15:19:25.884] LOG OdyseeAPI: Starting request to https://api.na-backend.odysee.com/api/v1/proxy
+[15:19:25.884] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/8fba44d7350896dc5c30542f77c5c462cacb653b/1f2db0.mp4
+[15:19:25.884] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:19:25.884] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:19:27.089] LOG Warmup 200 cache=MISS [magic] r=0
+[15:19:27.089] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/v6/streams/8fba44d7350896dc5c30542f77c5c462cacb653b/1f2db0.mp4?magic=1787750408
+[15:19:39.338] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/4ce2374203d2cd9200d6414ddad4a0758c969e83/9dee86.mp4
+[15:19:39.338] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:19:39.338] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:19:42.873] LOG Warmup 200 cache=MISS [magic] r=0
+[15:19:42.873] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/v6/streams/4ce2374203d2cd9200d6414ddad4a0758c969e83/9dee86.mp4?magic=1787750423
+[15:19:59.288] LOG OdyseeAPI: stream URL (v6): http://player.odycdn.com/v6/streams/976b7a97cbc286a4b2bbcd00f051ca30d1cea39d/c21143.mp4
+[15:19:59.288] LOG Warmup 401 cache=MISS [query nelkul] r=0
+[15:19:59.288] LOG 401 query nelkul -> egy proba magic-kel (figyelem: cache MISS lesz)
+[15:20:00.217] LOG Warmup 200 cache=MISS [magic] r=0
+[15:20:00.217] LOG LEJATSZAS INDUL [v4/mp4 magic-kel]: http://player.odycdn.com/v6/streams/976b7a97cbc286a4b2bbcd00f051ca30d1cea39d/c21143.mp4?magic=1787750441

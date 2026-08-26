@@ -13,6 +13,13 @@ var SpatialNavigation = function () {
         if (t >= 0 && e[t] && e[t].classList.remove("focused"), e[t = a]) {
             e[t].classList.add("focused");
             var n = e[t];
+            if (n.classList.contains("nav-item")) {
+                var p = n.parentNode;
+                if (p && p.scrollHeight > p.clientHeight) {
+                    var q = n.offsetTop - p.clientHeight / 2;
+                    q < 0 && (q = 0), p.scrollTop = q
+                }
+            }
             if (n.classList.contains("video-card")) {
                 var c = document.getElementById("main-content");
                 if (c) {

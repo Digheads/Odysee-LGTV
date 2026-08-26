@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -10,6 +11,7 @@
         document.write('<link rel="stylesheet" href="css/main.css?v=' + Date.now() + '">');
     </script>
 </head>
+
 <body>
     <div id="app" class="app-container">
         <!-- Sidebar Navigation -->
@@ -28,18 +30,20 @@
         <main id="main-content" class="main-content">
             <header class="top-header">
                 <h1 id="page-title">Home</h1>
-                <div id="search-container" style="display: none; margin-top: 20px; display: flex; gap: 20px;">
-                    <input type="text" id="search-input" class="focusable search-input" placeholder="Keresés..." style="flex: 1; padding: 15px; font-size: 24px; border-radius: 12px; border: 2px solid transparent; background: #2A2D35; color: white;" />
-                    <button id="btn-search" class="focusable btn-search" style="padding: 15px 40px; font-size: 24px; border-radius: 12px; background: #E2225E; color: white; border: 2px solid transparent; cursor: pointer;">Keresés</button>
+                <div id="search-container" style="display: none; margin-top: 20px;">
+                    <input type="text" id="search-input" class="focusable search-input" placeholder="Keresés..."
+                        style="-webkit-flex: 1; flex: 1; margin-right: 20px; padding: 15px; font-size: 24px; border-radius: 12px; border: 2px solid transparent; background: #2A2D35; color: white;" />
+                    <button id="btn-search" class="focusable btn-search"
+                        style="padding: 15px 40px; font-size: 24px; border-radius: 12px; background: #E2225E; color: white; border: 2px solid transparent; cursor: pointer;">Keresés</button>
                 </div>
             </header>
-            
+
             <div id="video-grid" class="video-grid">
                 <!-- Videos will be injected here -->
             </div>
             <div id="loading" class="loading-spinner">Loading...</div>
         </main>
-        
+
         <!-- Fullscreen Player -->
         <div id="player-container" class="player-container hidden">
             <div id="player-title" class="player-title"></div>
@@ -67,14 +71,25 @@
             </div>
         </div>
     </div>
-    
+
     <!-- On-Screen Debug Console -->
-    <div id="debug-console" style="position: absolute; top: 10px; right: 10px; width: 600px; height: 800px; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 14px; z-index: 9999; padding: 10px; overflow-y: auto; border: 1px solid #0f0; pointer-events: none;">
-        <div>DEBUG CONSOLE v1.0.73</div>
+    <div id="debug-console"
+        style="position: absolute; top: 10px; right: 10px; width: 600px; height: 800px; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 14px; z-index: 9999; padding: 10px; overflow-y: auto; border: 1px solid #0f0; pointer-events: none;">
+        <div>DEBUG CONSOLE v1.0.122 &mdash; RED = ki/be</div>
     </div>
-    
+
+    <!-- Fejlesztoi naplozas. Elesitesnel ezt a ket blokkot vedd ki. -->
+    <script>
+        // Csak akkor kell, ha az app file://-bol indul (telepitett appkent).
+        // Ha a dev szerverrol toltod be (http://<ip>:3000/), hagyd kikommentezve:
+        // a devlog.js magatol a betoltes helyere kuld.
+        window.DEVLOG_HOST = "192.168.0.172:3000";
+    </script>
+    <script src="js/devlog.js"></script>
+
     <script src="js/api.js"></script>
     <script src="js/spatial.js"></script>
     <script src="js/app.js"></script>
 </body>
+
 </html>
