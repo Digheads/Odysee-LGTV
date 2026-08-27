@@ -488,10 +488,11 @@ function closePlayer() {
     var e = document.getElementById("player-container"),
         t = document.getElementById("video-player");
     t.pause(), t.onerror = null, t.innerHTML = "", t.src = "", e.classList.add("hidden"), SpatialNavigation.refresh();
-    if (window.lastFocusedCard) {
+    var targetCard = window.isChannelPageOpen ? window.lastFocusedChannelCard : window.lastFocusedCard;
+    if (targetCard) {
         for (var n = document.querySelectorAll(".focusable"), i = 0, o = 0; o < n.length; o++)
             if (null !== n[o].offsetParent) {
-                if (n[o] === window.lastFocusedCard) {
+                if (n[o] === targetCard) {
                     SpatialNavigation.focusElement(i);
                     break
                 }
@@ -757,15 +758,107 @@ function createVideoCard(e) {
     var durationHtml = durationText ? '<div class="duration-overlay">' + durationText + '</div>' : '';
 
     var o = document.createElement("div");
+    o.tabIndex = 0;
     o.className = "video-card focusable";
     
     var avatarHtml = '<img class="channel-avatar" src="' + escapeHtml(avatarUrl) + '" onerror="this.src=\'icons/icon.png\'" />';
     o.innerHTML = '<div class="thumbnail-wrapper"><img class="thumbnail" src="' + escapeHtml(n) + '" />' + durationHtml + '</div><div class="info"><div class="title">' + escapeHtml(t) + '</div><div class="channel-meta">' + avatarHtml + '<div class="channel-text"><div class="channel">' + escapeHtml(i) + '</div><div class="card-date">' + escapeHtml(uploadDate) + '</div></div></div></div>';
 
-    return o.addEventListener("click", (function () {
-        window.lastFocusedCard = o;
-        playVideo(e)
-    })), o
+    var ptrIsDown = false;
+    var ptrTimer = null;
+    var ptrLongPressed = false;
+
+    o.addEventListener("mousedown", function(ev) {
+        ptrIsDown = true;
+        ptrLongPressed = false;
+        ptrTimer = setTimeout(function() {
+            ptrLongPressed = true;
+            if (e.signing_channel) {
+                window.lastFocusedCard = o;
+                window.openChannelPage(e.signing_channel);
+            }
+        }, 1200);
+    });
+    
+    o.addEventListener("touchstart", function(ev) {
+        ptrIsDown = true;
+        ptrLongPressed = false;
+        ptrTimer = setTimeout(function() {
+            ptrLongPressed = true;
+            if (e.signing_channel) {
+                window.lastFocusedCard = o;
+                window.openChannelPage(e.signing_channel);
+            }
+        }, 1200);
+    });
+
+    function cancelPointer(ev) {
+        if (ptrIsDown) {
+            ptrIsDown = false;
+            if (ptrTimer) {
+                clearTimeout(ptrTimer);
+                ptrTimer = null;
+            }
+            if (!ptrLongPressed) {
+                window.lastFocusedCard = o;
+                playVideo(e);
+            }
+        }
+    }
+
+    o.addEventListener("mouseup", cancelPointer);
+    o.addEventListener("touchend", cancelPointer);
+    
+    o.addEventListener("mouseleave", function() {
+        ptrIsDown = false;
+        if (ptrTimer) {
+            clearTimeout(ptrTimer);
+            ptrTimer = null;
+        }
+    });
+    
+    o.addEventListener("touchcancel", function() {
+        ptrIsDown = false;
+        if (ptrTimer) {
+            clearTimeout(ptrTimer);
+            ptrTimer = null;
+        }
+    });
+
+    o.addEventListener("longpress", function() {
+        if (e.signing_channel) {
+            window.lastFocusedCard = o;
+            window.openChannelPage(e.signing_channel);
+        }
+    });
+
+    o.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        
+        // If ptrIsDown is true, block the premature click
+        if (ptrIsDown || ptrLongPressed || window._spatialOkLongPressed) return;
+        
+        // Block native pointer clicks (they are handled by mouseup).
+        // Synthetic clicks (from spatial.js) don't have isTrusted or have it as false.
+        // Some older browsers might have isTrusted as undefined.
+        // We can just rely on the fact that native pointer clicks ALWAYS have a corresponding mousedown!
+        // But since we just checked ptrIsDown, it's false. So this click came after mouseup.
+        // Or it's a synthetic click from keyboard.
+        // We will just let ALL clicks play the video EXCEPT if they are from pointer!
+        // How to know if it's from pointer?
+        // Pointer clicks have screenX > 0 and screenY > 0! Synthetic clicks usually have 0!
+        if (ev.screenX > 0 || ev.screenY > 0) return; // Ignore native pointer click, mouseup handled it
+        
+        if (!window.isChannelPageOpen) {
+            window.lastFocusedCard = o;
+        } else {
+            window.lastFocusedChannelCard = o;
+        }
+        playVideo(e);
+    });
+    
+    return o;
 }
 
 function playVideo(e) {
@@ -1106,7 +1199,11 @@ function playVideo(e) {
         var releaseTimer = null;
         mainContent.addEventListener("scroll", function () {
             if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 500) {
-                loadMoreContent();
+                if (window.isChannelPageOpen) {
+                    if (typeof window.loadMoreChannelContent === "function") window.loadMoreChannelContent();
+                } else {
+                    loadMoreContent();
+                }
             }
             // Throttle: don't run on every event while scrolling.
             if (releaseTimer) clearTimeout(releaseTimer);
@@ -1132,7 +1229,11 @@ function playVideo(e) {
         n.paused || (l.classList.add("fade-out"), o.classList.add("fade-out"))
     }
     window.addEventListener("popstate", (function (e) {
-        document.getElementById("player-container").classList.contains("hidden") || closePlayer()
+        if (!document.getElementById("player-container").classList.contains("hidden")) {
+            closePlayer();
+        } else if (window.isChannelPageOpen) {
+            closeChannelPage();
+        }
     })), window.addEventListener("keydown", (function (e) {
         if (!document.getElementById("player-container").classList.contains("hidden")) {
             e.stopPropagation();
@@ -1155,6 +1256,12 @@ function playVideo(e) {
                 e.preventDefault();
                 history.back();
             } else 461 !== t && 8 !== t && 27 !== t && 10009 !== t || e.preventDefault()
+        } else if (window.isChannelPageOpen) {
+            var t = e.keyCode;
+            if (413 === t || 461 === t || 8 === t || 27 === t || 10009 === t) {
+                e.preventDefault();
+                history.back();
+            }
         }
     }), true), i.addEventListener("click", (function () {
         n.paused ? (n.play(), i.innerHTML = "&#9632;") : (n.pause(), i.innerHTML = "&#9654;", d())
@@ -1301,4 +1408,121 @@ function playVideo(e) {
         var o = 0;
         t && !isNaN(t) && t > 0 && (o = e / t * 100), a.style.width = o + "%", r.textContent = u(e, t) + " / " + u(t, t)
     }))
+
+    window.isChannelPageOpen = false;
+
+    window.closeChannelPage = function() {
+        if (!window.isChannelPageOpen) return;
+        window.isChannelPageOpen = false;
+        document.getElementById("channel-page").style.display = "none";
+        document.getElementById("video-grid").style.display = "";
+        var topHeader = document.querySelector(".top-header");
+        if (topHeader) topHeader.style.display = "block";
+        
+        SpatialNavigation.refresh();
+        if (window.lastFocusedCard) {
+            SpatialNavigation.focusNode(window.lastFocusedCard);
+        } else {
+            SpatialNavigation.focusNode(document.querySelector(".video-card"));
+        }
+    };
+
+    window.openChannelPage = function(channelClaim) {
+        if (!channelClaim) return;
+        window.isChannelPageOpen = true;
+        window.channelPageClaimId = channelClaim.claim_id;
+        window.channelPageCurrentPage = 1;
+        window.channelPageHasMore = true;
+        window.channelPageIsLoading = true;
+        history.pushState({ channelPage: true }, "", "");
+
+        document.getElementById("video-grid").style.display = "none";
+        var topHeader = document.querySelector(".top-header");
+        if (topHeader) topHeader.style.display = "none";
+        
+        var cp = document.getElementById("channel-page");
+        if (!cp) return;
+        cp.style.display = "";
+
+        var avatarUrl = channelClaim.value && channelClaim.value.thumbnail ? channelClaim.value.thumbnail.url : "";
+        document.getElementById("cp-avatar").src = avatarUrl ? thumbUrl(avatarUrl, 120) : "icons/icon.png";
+        document.getElementById("cp-name").textContent = channelClaim.value && channelClaim.value.title ? channelClaim.value.title : channelClaim.name;
+        
+        var uploadsCount = channelClaim.meta && channelClaim.meta.claims_in_channel ? channelClaim.meta.claims_in_channel : 0;
+        var statsEl = document.getElementById("cp-stats");
+        statsEl.textContent = uploadsCount + " uploads";
+
+        if (window.OdyseeAPI && window.OdyseeAPI.getSubscriberCount) {
+            OdyseeAPI.getSubscriberCount(channelClaim.claim_id, function(err, subCount) {
+                if (!err && subCount !== undefined) {
+                    statsEl.textContent = subCount + " followers • " + uploadsCount + " uploads";
+                }
+            });
+        }
+
+        var grid = document.getElementById("cp-video-grid");
+        grid.innerHTML = "";
+        document.getElementById("cp-loading").style.display = "block";
+        SpatialNavigation.focusNode(document.getElementById("channel-page"));
+
+        OdyseeAPI.searchChannelVideos(channelClaim.claim_id, function(err, res) {
+            window.channelPageIsLoading = false;
+            document.getElementById("cp-loading").style.display = "none";
+            if (err) {
+                grid.innerHTML = '<div style="color:white; font-size:24px; text-align:center; padding: 20px;">Error loading channel videos.</div>';
+                return;
+            }
+            if (res && res.items && res.items.length > 0) {
+                for (var i = 0; i < res.items.length; i++) {
+                    var card = createVideoCard(res.items[i]);
+                    if (i === 0 && card) {
+                        card.id = "cp-first-video";
+                        var header = document.getElementById("cp-header");
+                        if (header) header.setAttribute("data-sn-down", "#cp-first-video");
+                    }
+                    if (card) grid.appendChild(card);
+                }
+                SpatialNavigation.refresh();
+                setTimeout(function() {
+                    var header = document.getElementById("cp-header");
+                    if (header) SpatialNavigation.focusNode(header);
+                }, 100);
+            } else {
+                window.channelPageHasMore = false;
+                grid.innerHTML = '<div style="color:white; font-size:24px; text-align:center; padding: 20px;">No videos found.</div>';
+            }
+        }, 1);
+    };
+
+    window.loadMoreChannelContent = function() {
+        if (window.channelPageIsLoading || !window.channelPageHasMore || !window.channelPageClaimId) return;
+
+        window.channelPageIsLoading = true;
+        window.channelPageCurrentPage++;
+        var n = document.getElementById("cp-loading");
+        if (n) n.style.display = "block";
+
+        var t = document.getElementById("cp-video-grid");
+
+        OdyseeAPI.searchChannelVideos(window.channelPageClaimId, function(err, res) {
+            window.channelPageIsLoading = false;
+            if (n) n.style.display = "none";
+            
+            if (err) {
+                console.error("Load more channel videos failed", err);
+                return;
+            }
+            
+            if (res && res.items && res.items.length > 0) {
+                if (res.items.length < 20) window.channelPageHasMore = false;
+                for (var i = 0; i < res.items.length; i++) {
+                    var card = createVideoCard(res.items[i]);
+                    if (card) t.appendChild(card);
+                }
+                SpatialNavigation.refresh();
+            } else {
+                window.channelPageHasMore = false;
+            }
+        }, window.channelPageCurrentPage);
+    };
 }));

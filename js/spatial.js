@@ -1,18 +1,20 @@
 var SpatialNavigation = function () {
     var e = [],
-        t = -1;
+        t = -1,
+        lastFocusedEl = null;
 
     function a() {
         var a = document.querySelectorAll(".focusable");
         e = [];
         for (var c = 0; c < a.length; c++) null !== a[c].offsetParent && e.push(a[c]);
-        (t >= e.length || t >= 0 && -1 === e.indexOf(e[t])) && e.length > 0 && n(0)
+        (t >= e.length || t >= 0 && -1 === e.indexOf(lastFocusedEl)) && e.length > 0 && n(0)
     }
 
     function n(a) {
-        if (t >= 0 && e[t] && e[t].classList.remove("focused"), e[t = a]) {
+        if (lastFocusedEl && lastFocusedEl.classList.remove("focused"), e[t = a]) {
             e[t].classList.add("focused");
             var n = e[t];
+            lastFocusedEl = n;
             if (document.activeElement && document.activeElement.tagName === "INPUT" && document.activeElement !== n) {
                 document.activeElement.blur();
             }
@@ -29,6 +31,10 @@ var SpatialNavigation = function () {
                     var i = n.offsetTop - 150;
                     i < 0 && (i = 0), c.scrollTop = i
                 }
+            }
+            if (n.classList.contains("channel-header")) {
+                var c = document.getElementById("main-content");
+                if (c) c.scrollTop = 0;
             }
         }
     }
@@ -84,6 +90,7 @@ var SpatialNavigation = function () {
                 for (var o = c(i), s = -1, r = 1 / 0, f = 0; f < e.length; f++)
                     if (f !== t) {
                         if (isVideoCard && (a.keyCode === 37 || a.keyCode === 39) && (e[f].id === "search-input" || e[f].id === "btn-search")) continue;
+                        if (isVideoCard && a.keyCode !== 37 && e[f].classList.contains("nav-item")) continue;
                         
                         var l = c(e[f]),
                             h = l.cx - o.cx,
@@ -96,7 +103,7 @@ var SpatialNavigation = function () {
                                 break;
                             case 38:
                                 if (l.cy < o.cy) {
-                                    if (e[f].id === "search-input" || e[f].id === "btn-search") {
+                                    if (e[f].id === "search-input" || e[f].id === "btn-search" || e[f].id === "cp-header") {
                                         v = !0; // Relax horizontal constraint for wide search header
                                     } else if (Math.abs(h) <= Math.abs(d)) {
                                         v = !0;
@@ -110,16 +117,18 @@ var SpatialNavigation = function () {
                                 l.cy > o.cy && Math.abs(h) <= Math.abs(d) && (v = !0);
                                 break;
                             case 13:
-                                if (i.tagName === "INPUT") {
-                                    i.focus();
-                                    return;
+                                a.preventDefault();
+                                if (!window._spatialOkIsDown) {
+                                    window._spatialOkIsDown = true;
+                                    window._spatialOkLongPressed = false;
+                                    window._spatialOkTimer = setTimeout(function() {
+                                        window._spatialOkLongPressed = true;
+                                        var b = document.createEvent("CustomEvent");
+                                        b.initCustomEvent("longpress", true, true, null);
+                                        i.dispatchEvent(b);
+                                    }, 1200);
                                 }
-                                if ("function" == typeof i.click) i.click();
-                                else {
-                                    var b = document.createEvent("MouseEvents");
-                                    b.initEvent("click", !0, !0), i.dispatchEvent(b)
-                                }
-                                return
+                                return;
                         }
                         v && u < r && (r = u, s = f)
                     } 
@@ -137,7 +146,38 @@ var SpatialNavigation = function () {
     }
     return {
         init: function () {
-            a(), e.length > 0 && n(0), window.addEventListener("keydown", i), document.addEventListener("mouseover", (function (a) {
+            a(), e.length > 0 && n(0), window.addEventListener("keydown", i);
+            window.addEventListener("keypress", function(ev) {
+                if (ev.keyCode === 13) ev.preventDefault();
+            });
+            window.addEventListener("keyup", function(ev) {
+                if (ev.keyCode === 13) {
+                    ev.preventDefault();
+                    if (window._spatialOkIsDown) {
+                        window._spatialOkIsDown = false;
+                        if (window._spatialOkTimer) {
+                            clearTimeout(window._spatialOkTimer);
+                            window._spatialOkTimer = null;
+                        }
+                        if (!window._spatialOkLongPressed) {
+                            var el = document.querySelector(".focusable.focused");
+                            if (el) {
+                                if (el.tagName === "INPUT") {
+                                    el.focus();
+                                    return;
+                                }
+                                if ("function" == typeof el.click) el.click();
+                                else {
+                                    var b = document.createEvent("MouseEvents");
+                                    b.initEvent("click", !0, !0);
+                                    el.dispatchEvent(b);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            document.addEventListener("mouseover", (function (a) {
                 for (var c = a.target; c && c !== document;) {
                     if (c.classList && c.classList.contains("focusable")) {
                         var i = e.indexOf(c); - 1 !== i && i !== t && n(i);

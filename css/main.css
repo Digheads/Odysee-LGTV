@@ -496,3 +496,60 @@ body {
     -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
+
+/* Channel Page */
+.channel-page {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    padding: 20px;
+    width: 100%;
+}
+
+.cp-header {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #2A2D35;
+    border-radius: 12px;
+    border: 4px solid transparent;
+    transition: all 0.2s;
+}
+
+.cp-header.focused {
+    border-color: #E2225E;
+    box-shadow: 0 0 15px rgba(226, 34, 94, 0.5);
+    transform: scale(1.02);
+}
+
+.cp-avatar {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    margin-right: 30px;
+    object-fit: cover;
+    background-color: #1a1b20;
+}
+
+.cp-info {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+}
+
+.cp-name {
+    font-size: 36px;
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 10px;
+}
+
+.cp-stats {
+    font-size: 20px;
+    color: #a0a0a0;
+}
