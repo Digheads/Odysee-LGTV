@@ -51,6 +51,26 @@ var SpatialNavigation = function () {
         if (0 !== e.length) {
             var i = e[t];
             if (i) {
+                if (a.keyCode >= 37 && a.keyCode <= 40) {
+                    var override = null;
+                    if (a.keyCode === 37) override = i.getAttribute("data-sn-left");
+                    else if (a.keyCode === 38) override = i.getAttribute("data-sn-up");
+                    else if (a.keyCode === 39) override = i.getAttribute("data-sn-right");
+                    else if (a.keyCode === 40) override = i.getAttribute("data-sn-down");
+
+                    if (override) {
+                        var target = document.querySelector(override);
+                        if (target) {
+                            var targetIdx = e.indexOf(target);
+                            if (targetIdx !== -1) {
+                                a.preventDefault();
+                                n(targetIdx);
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 if (a.keyCode === 39 && i.classList.contains("nav-item")) {
                     for (var k = 0; k < e.length; k++) {
                         if (e[k].classList.contains("video-card") || e[k].id === "search-input" || e[k].id === "btn-search") {
@@ -60,8 +80,11 @@ var SpatialNavigation = function () {
                         }
                     }
                 }
+                var isVideoCard = i.classList.contains("video-card");
                 for (var o = c(i), s = -1, r = 1 / 0, f = 0; f < e.length; f++)
                     if (f !== t) {
+                        if (isVideoCard && (a.keyCode === 37 || a.keyCode === 39) && (e[f].id === "search-input" || e[f].id === "btn-search")) continue;
+                        
                         var l = c(e[f]),
                             h = l.cx - o.cx,
                             d = l.cy - o.cy,
@@ -72,7 +95,13 @@ var SpatialNavigation = function () {
                                 l.cx < o.cx && Math.abs(d) <= Math.abs(h) && (v = !0);
                                 break;
                             case 38:
-                                l.cy < o.cy && Math.abs(h) <= Math.abs(d) && (v = !0);
+                                if (l.cy < o.cy) {
+                                    if (e[f].id === "search-input" || e[f].id === "btn-search") {
+                                        v = !0; // Relax horizontal constraint for wide search header
+                                    } else if (Math.abs(h) <= Math.abs(d)) {
+                                        v = !0;
+                                    }
+                                }
                                 break;
                             case 39:
                                 l.cx > o.cx && Math.abs(d) <= Math.abs(h) && (v = !0);
