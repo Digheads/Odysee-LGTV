@@ -1360,19 +1360,33 @@ function playVideo(e) {
                             if (raw) {
                                 var newUrl = buildPlayableUrl(raw, useM);
                                 var savedTime = n.currentTime;
+                                var urlWithTime = newUrl + "#t=" + savedTime.toFixed(3);
                                 n.pause();
                                 n.removeAttribute("src");
                                 n.load();
+                                n.style.opacity = "0"; // Hide to prevent frame 0 flash
                                 setTimeout(function() {
-                                    setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                                    setSources(n, [{ url: urlWithTime, type: "video/mp4" }]);
                                     n.load();
                                     var onMeta = function() {
                                         n.removeEventListener("loadedmetadata", onMeta);
-                                        try { n.currentTime = savedTime; } catch(e) {}
+                                        try { 
+                                            if (Math.abs(n.currentTime - savedTime) > 2) {
+                                                n.currentTime = savedTime; 
+                                            } else {
+                                                n.style.opacity = "1";
+                                            }
+                                        } catch(e) {}
                                         var p = n.play();
                                         if (p && typeof p.catch === "function") {
                                             p.catch(function(err) { console.error("Watchdog play error:", err); });
                                         }
+                                        var onSeeked = function() {
+                                            n.removeEventListener("seeked", onSeeked);
+                                            n.style.opacity = "1";
+                                        };
+                                        n.addEventListener("seeked", onSeeked);
+                                        setTimeout(function() { n.style.opacity = "1"; }, 3000);
                                     };
                                     n.addEventListener("loadedmetadata", onMeta);
                                 }, 150);
