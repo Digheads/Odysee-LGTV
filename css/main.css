@@ -491,20 +491,20 @@ body {
 }
 
 .btn-play-pause {
-    width: 64px;
-    height: 64px;
+    width: 128px;
+    height: 128px;
     border-radius: 50%;
     background: #E2225E;
     color: white;
     border: none;
-    font-size: 28px;
+    font-size: 56px;
     padding: 0;
-    line-height: 64px;
+    line-height: 128px;
     text-align: center;
     cursor: pointer;
     -webkit-transition: transform 0.15s ease, box-shadow 0.15s ease;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
-    box-shadow: 0 2px 12px rgba(226, 34, 94, 0.4);
+    box-shadow: 0 4px 24px rgba(226, 34, 94, 0.4);
 }
 
 .btn-player.focused {

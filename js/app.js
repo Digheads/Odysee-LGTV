@@ -1258,6 +1258,7 @@ function playVideo(e) {
                     
                     // Pause video on first seek press so it doesn't keep playing
                     if (window._pendingSeekTime === undefined) {
+                        window._userAction = true;
                         window._wasPlayingBeforeSeek = !n.paused;
                         if (!n.paused) n.pause();
                     }
@@ -1283,6 +1284,7 @@ function playVideo(e) {
                             if (window._wasPlayingBeforeSeek) {
                                 var onSeeked = function() {
                                     n.removeEventListener("seeked", onSeeked);
+                                    window._userAction = true;
                                     n.play();
                                     window._wasPlayingBeforeSeek = false;
                                 };
@@ -1308,12 +1310,20 @@ function playVideo(e) {
             }
         }
     }), true), i.addEventListener("click", (function () {
+        window._userAction = true;
         n.paused ? (n.play(), i.innerHTML = "\u275A\u275A") : (n.pause(), i.innerHTML = "\u25B6", d())
     })), n.addEventListener("play", (function () {
-        i.innerHTML = "\u275A\u275A", d()
+        i.innerHTML = "\u275A\u275A", d();
+        if (window._userAction) {
+            stopWatchdog();
+            window._userAction = false;
+        }
     })), n.addEventListener("pause", (function () {
         i.innerHTML = "\u25B6", d();
-        stopWatchdog();
+        if (window._userAction) {
+            stopWatchdog();
+            window._userAction = false;
+        }
     }));
     var c = document.getElementById("player-loading"),
         lastTime = 0,
@@ -1354,15 +1364,14 @@ function playVideo(e) {
                                 setSources(n, [{ url: newUrl, type: "video/mp4" }]);
                                 n.load();
                                 var onMeta = function() {
-                                    try { n.currentTime = savedTime; } catch(e) {}
                                     n.removeEventListener("loadedmetadata", onMeta);
+                                    try { n.currentTime = savedTime; } catch(e) {}
+                                    var p = n.play();
+                                    if (p && typeof p.catch === "function") {
+                                        p.catch(function(err) { console.error("Watchdog play error:", err); });
+                                    }
                                 };
                                 n.addEventListener("loadedmetadata", onMeta);
-                                var onReady = function() {
-                                    n.play(); // this triggers "playing" -> 30s delay -> watchdog re-arms
-                                    n.removeEventListener("canplay", onReady);
-                                };
-                                n.addEventListener("canplay", onReady);
                             } else {
                                 n.pause();
                                 n.play();
