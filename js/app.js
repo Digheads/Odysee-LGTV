@@ -1361,17 +1361,21 @@ function playVideo(e) {
                                 var newUrl = buildPlayableUrl(raw, useM);
                                 var savedTime = n.currentTime;
                                 n.pause();
-                                setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                                n.removeAttribute("src");
                                 n.load();
-                                var onMeta = function() {
-                                    n.removeEventListener("loadedmetadata", onMeta);
-                                    try { n.currentTime = savedTime; } catch(e) {}
-                                    var p = n.play();
-                                    if (p && typeof p.catch === "function") {
-                                        p.catch(function(err) { console.error("Watchdog play error:", err); });
-                                    }
-                                };
-                                n.addEventListener("loadedmetadata", onMeta);
+                                setTimeout(function() {
+                                    setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                                    n.load();
+                                    var onMeta = function() {
+                                        n.removeEventListener("loadedmetadata", onMeta);
+                                        try { n.currentTime = savedTime; } catch(e) {}
+                                        var p = n.play();
+                                        if (p && typeof p.catch === "function") {
+                                            p.catch(function(err) { console.error("Watchdog play error:", err); });
+                                        }
+                                    };
+                                    n.addEventListener("loadedmetadata", onMeta);
+                                }, 150);
                             } else {
                                 n.pause();
                                 n.play();
