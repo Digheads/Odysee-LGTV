@@ -451,9 +451,10 @@ function buildPlayableUrl(rawUrl, useMagic) {
 // which is why we need it for every image. The source format cannot be determined
 // from the URL anyway: thumbnails.lbry.com serves both JPEG and WebP
 // from the same host without extension or Content-Type.
-function thumbUrl(u) {
+function thumbUrl(u, size) {
     if (!u) return "";
-    return "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&output=jpg&w=400";
+    var w = size || 400;
+    return "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&output=jpg&w=" + w;
 }
 
 // Infinite scrolling never released the cards. DOM nodes cannot be deleted
@@ -713,12 +714,32 @@ function createVideoCard(e) {
     if (!e.value) return null;
     var t = e.value.title || "Untitled",
         n = thumbUrl(e.value.thumbnail ? e.value.thumbnail.url : "");
-    var i = e.signing_channel && e.signing_channel.value ? e.signing_channel.value.title : "Unknown";
+    var i = e.signing_channel && e.signing_channel.value ? e.signing_channel.value.title || e.signing_channel.name : "Unknown";
+    var rawAvatarUrl = e.signing_channel && e.signing_channel.value && e.signing_channel.value.thumbnail ? e.signing_channel.value.thumbnail.url : "";
+    var avatarUrl = rawAvatarUrl ? thumbUrl(rawAvatarUrl, 64) : "icons/icon.png";
     var uploadDate = "";
-    if (e.meta && e.meta.creation_timestamp) {
-        uploadDate = new Date(e.meta.creation_timestamp * 1000).toLocaleDateString();
-    } else if (e.value && e.value.release_time) {
-        uploadDate = new Date(e.value.release_time * 1000).toLocaleDateString();
+    var ts = e.value && e.value.release_time ? e.value.release_time : (e.meta && e.meta.creation_timestamp ? e.meta.creation_timestamp : 0);
+    if (ts > 0) {
+        var seconds = Math.floor((Date.now() / 1000) - ts);
+        var interval = seconds / 31536000;
+        if (interval >= 1) uploadDate = Math.floor(interval) + (Math.floor(interval) === 1 ? " year ago" : " years ago");
+        else {
+            interval = seconds / 2592000;
+            if (interval >= 1) uploadDate = Math.floor(interval) + (Math.floor(interval) === 1 ? " month ago" : " months ago");
+            else {
+                interval = seconds / 86400;
+                if (interval >= 1) uploadDate = Math.floor(interval) + (Math.floor(interval) === 1 ? " day ago" : " days ago");
+                else {
+                    interval = seconds / 3600;
+                    if (interval >= 1) uploadDate = Math.floor(interval) + (Math.floor(interval) === 1 ? " hour ago" : " hours ago");
+                    else {
+                        interval = seconds / 60;
+                        if (interval >= 1) uploadDate = Math.floor(interval) + (Math.floor(interval) === 1 ? " minute ago" : " minutes ago");
+                        else uploadDate = Math.max(0, Math.floor(seconds)) + " seconds ago";
+                    }
+                }
+            }
+        }
     }
 
     var duration = e.value && e.value.video ? e.value.video.duration : 0;
@@ -737,7 +758,9 @@ function createVideoCard(e) {
 
     var o = document.createElement("div");
     o.className = "video-card focusable";
-    o.innerHTML = '<div class="thumbnail-wrapper"><img class="thumbnail" src="' + escapeHtml(n) + '" />' + durationHtml + '</div><div class="info"><div class="title">' + escapeHtml(t) + '</div><div class="channel">' + escapeHtml(i) + '</div><div class="card-date">' + escapeHtml(uploadDate) + '</div></div>';
+    
+    var avatarHtml = '<img class="channel-avatar" src="' + escapeHtml(avatarUrl) + '" onerror="this.src=\'icons/icon.png\'" />';
+    o.innerHTML = '<div class="thumbnail-wrapper"><img class="thumbnail" src="' + escapeHtml(n) + '" />' + durationHtml + '</div><div class="info"><div class="title">' + escapeHtml(t) + '</div><div class="channel-meta">' + avatarHtml + '<div class="channel-text"><div class="channel">' + escapeHtml(i) + '</div><div class="card-date">' + escapeHtml(uploadDate) + '</div></div></div></div>';
 
     return o.addEventListener("click", (function () {
         window.lastFocusedCard = o;
