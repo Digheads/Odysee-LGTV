@@ -37,15 +37,30 @@ body {
     z-index: 10;
 }
 
-.logo {
-    padding: 0 40px;
+.brand-logo {
+    text-align: center;
+    margin-top: -20px;
     margin-bottom: 60px;
 }
 
+.brand-logo svg {
+    width: 160px;
+    height: 48px;
+}
+
+.logo {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-justify-content: center;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
 .logo-img {
-    width: 120px;
-    height: auto;
-    border-radius: 20px;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #2A2D35;
 }
 
 .nav-links {
@@ -64,6 +79,10 @@ body {
 }
 
 .nav-item {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
     font-size: 28px;
     font-weight: 600;
     padding: 20px 20px;
@@ -92,19 +111,14 @@ body {
     top: 0;
     width: 1600px;
     height: 1080px;
-    padding: 60px;
+    padding: 20px 60px 60px 60px;
     overflow-y: hidden;
 }
 
 .top-header {
-    margin-bottom: 40px;
+    margin-bottom: 10px;
 }
 
-#page-title {
-    font-size: 48px;
-    font-weight: 700;
-    letter-spacing: -1px;
-}
 
 .search-input.focused {
     border-color: #E2225E !important;
@@ -176,6 +190,18 @@ body {
     object-fit: cover;
     background-color: #2A2D35;
     border-radius: 12px;
+}
+
+.video-card .duration-overlay {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .video-card .info {

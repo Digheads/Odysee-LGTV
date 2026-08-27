@@ -214,6 +214,7 @@ var OdyseeAPI = function () {
                     if (!data.hasOwnProperty(k)) continue;
                     var sec = data[k];
                     if (!sec || "object" != typeof sec) continue;
+                    if (k === "EXPLORABLE_CHANNEL" || k === "PRIMARY_CONTENT") continue;
                     var ids = sec.channelIds || [];
                     if (!ids.length) continue;
                     out.push({
