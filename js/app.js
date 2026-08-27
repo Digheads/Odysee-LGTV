@@ -1248,10 +1248,54 @@ function playVideo(e) {
             }
 
             if (415 === t || 19 === t || 179 === t || 13 === t) (13 === t && "BUTTON" !== document.activeElement.tagName || 13 !== t) && i.click();
-            else if (412 === t || 37 === t) n.currentTime = Math.max(0, n.currentTime - 10);
-            else if (417 === t || 39 === t) {
-                var o = isNaN(n.duration) ? n.currentTime + 10 + 100 : n.duration;
-                n.currentTime = Math.min(o, n.currentTime + 10)
+            else if (412 === t || 37 === t || 417 === t || 39 === t) {
+                try {
+                    var currentTarget = (window._pendingSeekTime !== undefined) ? window._pendingSeekTime : n.currentTime;
+                    var direction = (412 === t || 37 === t) ? -10 : 10;
+                    var maxDuration = isNaN(n.duration) ? currentTarget + 10 + 100 : n.duration;
+                    var newTime = currentTarget + direction;
+                    newTime = Math.max(0, Math.min(maxDuration, newTime));
+                    
+                    // Pause video on first seek press so it doesn't keep playing
+                    if (window._pendingSeekTime === undefined) {
+                        window._wasPlayingBeforeSeek = !n.paused;
+                        if (!n.paused) n.pause();
+                    }
+                    
+                    window._pendingSeekTime = newTime;
+                    
+                    // Update progress bar immediately for visual feedback
+                    var dur = n.duration;
+                    var dFallback = parseFloat(n.getAttribute("data-duration")) || 0;
+                    if (!dur || isNaN(dur) || dur === Infinity) dur = dFallback;
+                    if (dur > 0) {
+                        a.style.width = (newTime / dur * 100) + "%";
+                        r.textContent = u(newTime, dur) + " / " + u(dur, dur);
+                    }
+                    
+                    if (window._seekDebounceTimer) clearTimeout(window._seekDebounceTimer);
+                    window._seekDebounceTimer = setTimeout(function() {
+                        try {
+                            c.style.display = "block"; // Show loading spinner
+                            var seekTarget = window._pendingSeekTime;
+                            window._pendingSeekTime = undefined;
+                            
+                            if (window._wasPlayingBeforeSeek) {
+                                var onSeeked = function() {
+                                    n.removeEventListener("seeked", onSeeked);
+                                    n.play();
+                                    window._wasPlayingBeforeSeek = false;
+                                };
+                                n.addEventListener("seeked", onSeeked);
+                            }
+                            n.currentTime = seekTarget;
+                        } catch (err) {
+                            console.error("Delayed seek failed: " + err);
+                        }
+                    }, 400);
+                } catch(err) {
+                    console.error("Seek calculation failed: " + err);
+                }
             } else if (413 === t) {
                 e.preventDefault();
                 history.back();
@@ -1264,18 +1308,74 @@ function playVideo(e) {
             }
         }
     }), true), i.addEventListener("click", (function () {
-        n.paused ? (n.play(), i.innerHTML = "&#9632;") : (n.pause(), i.innerHTML = "&#9654;", d())
+        n.paused ? (n.play(), i.innerHTML = "\u275A\u275A") : (n.pause(), i.innerHTML = "\u25B6", d())
     })), n.addEventListener("play", (function () {
-        i.innerHTML = "&#9632;", d()
+        i.innerHTML = "\u275A\u275A", d()
     })), n.addEventListener("pause", (function () {
-        i.innerHTML = "&#9654;", d();
-        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+        i.innerHTML = "\u25B6", d();
+        stopWatchdog();
     }));
     var c = document.getElementById("player-loading"),
-        watchdogTimer = null,
         lastTime = 0,
         stuckCount = 0,
         isBufferingAllowed = true;
+
+    // --- Watchdog: only runs after 30s of stable playback ---
+    function stopWatchdog() {
+        if (window._watchdogDelayTimer) { clearTimeout(window._watchdogDelayTimer); window._watchdogDelayTimer = null; }
+        if (window._watchdogInterval) { clearInterval(window._watchdogInterval); window._watchdogInterval = null; }
+        stuckCount = 0;
+    }
+    window.stopWatchdog = stopWatchdog;
+
+    function startWatchdogDelayed() {
+        // If watchdog is already armed and monitoring, don't restart it
+        if (window._watchdogInterval) return;
+        stopWatchdog();
+        window._watchdogDelayTimer = setTimeout(function() {
+            console.log("Watchdog: armed after 30s of stable playback");
+            lastTime = n.currentTime;
+            stuckCount = 0;
+            window._watchdogInterval = setInterval(function() {
+                try {
+                    if (n.paused || n.ended || n.seeking) return;
+                    var current = n.currentTime;
+                    if (Math.abs(current - lastTime) < 0.1) {
+                        stuckCount++;
+                        if (stuckCount >= 1) { // 500ms stalled -> instant reconnect
+                            console.log("Watchdog: mid-stream stall, reconnecting!");
+                            stopWatchdog();
+                            var raw = n.dataset.rawUrl;
+                            var useM = n.dataset.useMagic === "true";
+                            if (raw) {
+                                var newUrl = buildPlayableUrl(raw, useM);
+                                var savedTime = n.currentTime;
+                                n.pause();
+                                setSources(n, [{ url: newUrl, type: "video/mp4" }]);
+                                n.load();
+                                var onMeta = function() {
+                                    try { n.currentTime = savedTime; } catch(e) {}
+                                    n.removeEventListener("loadedmetadata", onMeta);
+                                };
+                                n.addEventListener("loadedmetadata", onMeta);
+                                var onReady = function() {
+                                    n.play(); // this triggers "playing" -> 30s delay -> watchdog re-arms
+                                    n.removeEventListener("canplay", onReady);
+                                };
+                                n.addEventListener("canplay", onReady);
+                            } else {
+                                n.pause();
+                                n.play();
+                            }
+                        }
+                    } else {
+                        stuckCount = 0;
+                        lastTime = current;
+                    }
+                } catch(e) {}
+            }, 500);
+        }, 30000);
+    }
 
     function u(e, total) {
         if (isNaN(e)) return "00:00";
@@ -1293,84 +1393,23 @@ function playVideo(e) {
         c.style.display = "block"
     })), n.addEventListener("seeking", (function () {
         c.style.display = "block";
-        // WebOS fires "seeking" when the network stalls. We only want to allow 
-        // long buffering if it's a REAL user seek.
-        if (Math.abs(n.currentTime - lastTime) > 1) {
-            window._videoStallLimit = 40; // 20s for real seek
-        }
+        stopWatchdog();
     })), n.addEventListener("seeked", (function () {
         c.style.display = "none"
     })), n.addEventListener("playing", (function () {
         c.style.display = "none";
-        if (watchdogTimer) clearInterval(watchdogTimer);
-        lastTime = n.currentTime;
-        stuckCount = 0;
-        window._videoStallLimit = window._videoStallLimit || 40; 
-        watchdogTimer = setInterval(function() {
-            try {
-                if (!n.paused && !n.ended) {
-                    if (n.seeking) {
-                        stuckCount = 0;
-                        lastTime = n.currentTime;
-                        return;
-                    }
-                    var current = n.currentTime;
-                    if (Math.abs(current - lastTime) < 0.1) {
-                        stuckCount++;
-                        var limit = window._videoStallLimit || 16;
-                        if (stuckCount >= limit) {
-                            console.log("Watchdog: video stalled for " + (limit/2) + " seconds, auto-reconnecting!");
-                            var raw = n.dataset.rawUrl;
-                            var useM = n.dataset.useMagic === "true";
-                            if (raw) {
-                                var newUrl = buildPlayableUrl(raw, useM);
-                                console.log("Watchdog: fresh URL -> " + newUrl);
-                                var savedTime = n.currentTime;
-                                window._videoStallLimit = 40; // 20s for reconnect
-                                n.pause();
-                                setSources(n, [{ url: newUrl, type: "video/mp4" }]);
-                                n.load();
-                                
-                                var onMetadata = function() {
-                                    try { n.currentTime = savedTime; } catch(e) { console.error("Seek failed on reconnect", e); }
-                                    n.removeEventListener("loadedmetadata", onMetadata);
-                                };
-                                n.addEventListener("loadedmetadata", onMetadata);
-
-                                var onReady = function() {
-                                    n.play();
-                                    n.removeEventListener("canplay", onReady);
-                                };
-                                n.addEventListener("canplay", onReady);
-                            } else {
-                                n.pause();
-                                n.play();
-                            }
-                            stuckCount = 0;
-                        }
-                    } else {
-                        stuckCount = 0;
-                        lastTime = current;
-                        window._videoStallLimit = 16; // 8s for mid-stream stalls once playing fine
-                    }
-                }
-            } catch(e) {
-                // Ignore DOM Exception 11 if the video object gets into an invalid state temporarily
-            }
-        }, 500);
+        startWatchdogDelayed(); // stop any existing, wait 30s, then arm
     })), n.addEventListener("canplay", (function () {
         c.style.display = "none";
         var errEl = document.getElementById("player-error");
         if (errEl) errEl.style.display = "none";
-        // Positive feedback: until now we could only infer from the LACK of an error
-        // whether it started. currentSrc shows which <source> won --
-        // this decides whether the HLS or the mp4 source was selected.
         clearStall();
         console.log("PLAYABLE. Player selected: " +
             (n.currentSrc || "(unknown)"))
     })), n.addEventListener("error", (function () {
         c.style.display = "none"
     })), n.addEventListener("ended", (function () {
+        stopWatchdog();
         var e = n.currentTime || 0,
             t = n.duration,
             i = parseFloat(n.getAttribute("data-duration")) || 0;
@@ -1382,7 +1421,6 @@ function playVideo(e) {
             var useM = n.dataset.useMagic === "true";
             if (raw) {
                 var newUrl = buildPlayableUrl(raw, useM);
-                console.log("Watchdog (EOF): fresh URL -> " + newUrl);
                 var savedTime = n.currentTime;
                 isBufferingAllowed = true;
                 n.pause();
@@ -1398,15 +1436,17 @@ function playVideo(e) {
             return;
         }
 
-        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
         closePlayer()
     })), n.addEventListener("timeupdate", (function () {
-        var e = n.currentTime || 0,
-            t = n.duration,
-            i = parseFloat(n.getAttribute("data-duration")) || 0;
-        t && !isNaN(t) && t !== 1 / 0 || (t = i);
-        var o = 0;
-        t && !isNaN(t) && t > 0 && (o = e / t * 100), a.style.width = o + "%", r.textContent = u(e, t) + " / " + u(t, t)
+        try {
+            if (window._pendingSeekTime !== undefined) return; // Don't overwrite during seek
+            var e = n.currentTime || 0,
+                t = n.duration,
+                i = parseFloat(n.getAttribute("data-duration")) || 0;
+            t && !isNaN(t) && t !== 1 / 0 || (t = i);
+            var o = 0;
+            t && !isNaN(t) && t > 0 && (o = e / t * 100), a.style.width = o + "%", r.textContent = u(e, t) + " / " + u(t, t)
+        } catch(err) {}
     }))
 
     window.isChannelPageOpen = false;

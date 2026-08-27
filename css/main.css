@@ -490,11 +490,35 @@ body {
     backdrop-filter: blur(10px);
 }
 
+.btn-play-pause {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #E2225E;
+    color: white;
+    border: none;
+    font-size: 28px;
+    padding: 0;
+    line-height: 64px;
+    text-align: center;
+    cursor: pointer;
+    -webkit-transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 12px rgba(226, 34, 94, 0.4);
+}
+
 .btn-player.focused {
     border-color: #E2225E;
     background: rgba(247, 10, 141, 0.2);
     -webkit-transform: scale(1.05);
     transform: scale(1.05);
+}
+
+.btn-play-pause.focused {
+    -webkit-transform: scale(1.15);
+    transform: scale(1.15);
+    box-shadow: 0 4px 20px rgba(226, 34, 94, 0.7);
+    background: #ff2d6f;
 }
 
 /* Channel Page */
