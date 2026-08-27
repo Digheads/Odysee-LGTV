@@ -1187,9 +1187,9 @@ function playVideo(e) {
     })), n.addEventListener("seeking", (function () {
         c.style.display = "block";
         // WebOS fires "seeking" when the network stalls. We only want to allow 
-        // long buffering (isBufferingAllowed=true) if it's a REAL user seek.
+        // long buffering if it's a REAL user seek.
         if (Math.abs(n.currentTime - lastTime) > 1) {
-            isBufferingAllowed = true;
+            window._videoStallLimit = 40; // 20s for real seek
         }
     })), n.addEventListener("seeked", (function () {
         c.style.display = "none"
@@ -1198,7 +1198,7 @@ function playVideo(e) {
         if (watchdogTimer) clearInterval(watchdogTimer);
         lastTime = n.currentTime;
         stuckCount = 0;
-        isBufferingAllowed = false; // The video is now playing, so future stalls are unexpected
+        window._videoStallLimit = window._videoStallLimit || 40; 
         watchdogTimer = setInterval(function() {
             try {
                 if (!n.paused && !n.ended) {
@@ -1210,7 +1210,7 @@ function playVideo(e) {
                     var current = n.currentTime;
                     if (Math.abs(current - lastTime) < 0.1) {
                         stuckCount++;
-                        var limit = isBufferingAllowed ? 60 : 2; // 30s for real seek, 1s for normal playback stall
+                        var limit = window._videoStallLimit || 16;
                         if (stuckCount >= limit) {
                             console.log("Watchdog: video stalled for " + (limit/2) + " seconds, auto-reconnecting!");
                             var raw = n.dataset.rawUrl;
@@ -1219,12 +1219,18 @@ function playVideo(e) {
                                 var newUrl = buildPlayableUrl(raw, useM);
                                 console.log("Watchdog: fresh URL -> " + newUrl);
                                 var savedTime = n.currentTime;
-                                isBufferingAllowed = true;
+                                window._videoStallLimit = 40; // 20s for reconnect
                                 n.pause();
                                 setSources(n, [{ url: newUrl, type: "video/mp4" }]);
                                 n.load();
+                                
+                                var onMetadata = function() {
+                                    try { n.currentTime = savedTime; } catch(e) { console.error("Seek failed on reconnect", e); }
+                                    n.removeEventListener("loadedmetadata", onMetadata);
+                                };
+                                n.addEventListener("loadedmetadata", onMetadata);
+
                                 var onReady = function() {
-                                    try { n.currentTime = savedTime; } catch(e) {}
                                     n.play();
                                     n.removeEventListener("canplay", onReady);
                                 };
@@ -1238,7 +1244,7 @@ function playVideo(e) {
                     } else {
                         stuckCount = 0;
                         lastTime = current;
-                        isBufferingAllowed = false; // it is progressing, so future stalls are unexpected
+                        window._videoStallLimit = 16; // 8s for mid-stream stalls once playing fine
                     }
                 }
             } catch(e) {
