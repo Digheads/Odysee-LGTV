@@ -30,7 +30,10 @@ var SpatialNavigation = function () {
                 var c = document.getElementById("main-content");
                 if (c) {
                     var i = n.offsetTop - 150;
-                    i < 0 && (i = 0), c.scrollTop = i
+                    if (i < 0) i = 0;
+                    if (Math.abs(c.scrollTop - i) > 20) {
+                        c.scrollTop = i;
+                    }
                 }
             }
             if (n.classList.contains("channel-header")) {

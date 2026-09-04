@@ -165,6 +165,7 @@ body {
 }
 
 .video-card {
+    position: relative;
     display: inline-block;
     vertical-align: top;
     font-size: 16px;
@@ -174,8 +175,12 @@ body {
     background: transparent;
     border-radius: 12px;
     overflow: hidden;
-    transition: all 0.3s ease;
     border: 3px solid transparent;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    transition: -webkit-transform 0.12s ease-out, transform 0.12s ease-out;
 }
 
 .video-card:nth-child(4n) {
@@ -280,12 +285,16 @@ body {
 }
 
 .video-card.focused {
-    -webkit-transform: scale(1.05);
-    transform: scale(1.05);
+    -webkit-transform: translate3d(0, 0, 0) scale(1.05);
+    transform: translate3d(0, 0, 0) scale(1.05);
     border-color: #E2225E;
-    box-shadow: 0 10px 30px rgba(226, 34, 94, 0.2);
-    z-index: 2;
-    background: #1a1a1a;
+    box-shadow: 0 4px 15px rgba(226, 34, 94, 0.4);
+    z-index: 5;
+    background: #1e2129;
+}
+
+.video-card.focused .title {
+    color: #FFFFFF;
 }
 
 .loading-spinner {
