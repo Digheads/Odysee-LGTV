@@ -35,8 +35,13 @@ var RemoteLog = (function () {
         timer = null;
         if (!queue.length) return;
         var url = resolveEndpoint();
-        if (!url || failures >= MAX_FAILURES) {
+        if (!url) {
             queue.length = 0;
+            return;
+        }
+        if (failures >= MAX_FAILURES) {
+            if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE);
+            if (!timer) timer = setTimeout(function () { failures = 0; flush(); }, 2000);
             return;
         }
         var batch = queue.splice(0, MAX_QUEUE),
@@ -67,8 +72,7 @@ var RemoteLog = (function () {
 
     return {
         push: function (level, msg) {
-            if (failures >= MAX_FAILURES) return;
-            queue.push({ level: level, msg: String(msg) });
+            queue.push({ level: level || "log", msg: String(msg) });
             // Send immediately on error: if the app crashes instantly, we don't want to lose it.
             if ("error" === level || queue.length >= MAX_QUEUE) {
                 if (null !== timer) {

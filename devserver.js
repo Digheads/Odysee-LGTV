@@ -55,7 +55,7 @@ function colorize(level, msg) {
     if (level === "error") return C.red + msg + C.reset;
     if (/\bcache=HIT\b/.test(msg)) return C.green + msg + C.reset;
     if (/\bcache=MISS\b/.test(msg) || /\b(401|403|404|429|503)\b/.test(msg)) return C.yellow + msg + C.reset;
-    if (/^\[[^\]]*proba\]/.test(msg) || /LEJATSZAS INDUL/.test(msg)) return C.cyan + msg + C.reset;
+    if (/^\[[^\]]*test\]/.test(msg) || /PLAYBACK STARTED/.test(msg)) return C.cyan + msg + C.reset;
     return msg;
 }
 

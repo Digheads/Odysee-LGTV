@@ -1,0 +1,806 @@
+// ---------------------------------------------------------------------------
+// Video player, streaming engine, controls and watchdog
+// (ES5 compatible for webOS 2.0+)
+// ---------------------------------------------------------------------------
+
+var Player = (function () {
+    var PREFER_HLS = true;
+    var MIME_HLS = "application/vnd.apple.mpegurl";
+    var MIME_MP4 = "video/mp4";
+
+    var stallTimer = null;
+    var rebuf_count = 0;
+    var rebuf_start = 0;
+    var rebuf_duration = 0;
+    var last_progress_report = 0;
+
+    function clearStall() {
+        if (stallTimer) {
+            clearTimeout(stallTimer);
+            stallTimer = null;
+        }
+    }
+
+    function setSources(video, list) {
+        video.removeAttribute("src");
+        video.innerHTML = "";
+        for (var k = 0; k < list.length; k++) {
+            if (!list[k] || !list[k].url) continue;
+            var s = document.createElement("source");
+            s.setAttribute("src", list[k].url);
+            if (list[k].type) s.setAttribute("type", list[k].type);
+            s.onerror = function () {
+                console.error("Source tag error on: " + this.src);
+            };
+            video.appendChild(s);
+            console.log("  source " + (k + 1) + ": " + (list[k].type || "no MIME type") + " -> " + list[k].url);
+        }
+    }
+
+    function closePlayer() {
+        clearStall();
+        stopWatchdog();
+        clearReconnectStall();
+        var e = document.getElementById("player-container"),
+            t = document.getElementById("video-player");
+
+        if (!t) return;
+        t.style.opacity = "1";
+
+        // Send watchman report on close if we have played something
+        if (!t.paused || t.currentTime > 0) {
+            var dur = t.duration || parseFloat(t.getAttribute("data-duration")) || 0;
+            var rel = dur > 0 ? (t.currentTime / dur * 100) : 0;
+            if (window.OdyseeAPI && typeof OdyseeAPI.reportWatchmanPlayback === "function") {
+                OdyseeAPI.reportWatchmanPlayback(t.currentSrc || "", dur, t.currentTime, rel, rebuf_count, rebuf_duration);
+            }
+        }
+        rebuf_count = 0;
+        rebuf_start = 0;
+        rebuf_duration = 0;
+
+        t.pause();
+        t.onerror = null;
+        t.innerHTML = "";
+        t.src = "";
+        if (e) e.classList.add("hidden");
+        SpatialNavigation.refresh();
+
+        var targetCard = window.isChannelPageOpen ? window.lastFocusedChannelCard : window.lastFocusedCard;
+        if (targetCard) {
+            for (var n = document.querySelectorAll(".focusable"), i = 0, o = 0; o < n.length; o++) {
+                if (null !== n[o].offsetParent) {
+                    if (n[o] === targetCard) {
+                        SpatialNavigation.focusElement(i);
+                        break;
+                    }
+                    i++;
+                }
+            }
+        }
+    }
+
+    function playVideo(e) {
+        var t = e.value && e.value.video ? e.value.video.duration : 0,
+            n = document.getElementById("player-container"),
+            i = document.getElementById("video-player"),
+            o = document.getElementById("player-loading"),
+            a = document.getElementById("player-title"),
+            playerError = document.getElementById("player-error");
+
+        var currentClaim = e,
+            hadHls = false,
+            triedMp4 = false,
+            stalledAtZero = false,
+            playReason = "";
+
+        function handleMediaError(code, url) {
+            clearStall();
+            var cur = i ? (i.currentTime || 0) : 0;
+            if (cur > 5 && !i.seeking && window._pendingSeekTime === undefined) {
+                console.log("Watchdog: mid-stream media error (" + code + ") at " + cur.toFixed(2) + "s -> instant reconnect!");
+                reconnectStream(cur);
+                return;
+            }
+            var magicOn = -1 !== url.indexOf("magic=");
+            var msg = {
+                1: "Aborted (MEDIA_ERR_ABORTED).",
+                2: "Network error (MEDIA_ERR_NETWORK).",
+                3: "Decode error (MEDIA_ERR_DECODE) - unsupported codec.",
+                4: "Unsupported source (MEDIA_ERR_SRC_NOT_SUPPORTED)."
+            }[code] || ("Unknown media error (" + code + ").");
+            console.error("Video error " + code + ": " + msg);
+            if (o) o.style.display = "none";
+
+            if (3 === code || 4 === code) {
+                if (!triedMp4 && -1 === url.indexOf("/v6/streams/")) {
+                    var mp4 = OdyseeAPI.buildMp4Url(currentClaim);
+                    if (mp4) {
+                        triedMp4 = true;
+                        playReason = "raw mp4 fallback (previous source error code: " + code + ")";
+                        console.log("FALLBACK REASON: " + (hadHls ? "HLS" : "v4") +
+                            " source failed with error " + code + " -> raw mp4: " + mp4);
+                        if (window.MediaProbe) MediaProbe.probeUrl(Utils.buildPlayableUrl(mp4, magicOn), "mp4-proba");
+                        if (playerError) {
+                            playerError.textContent = (hadHls ? "HLS is not playable" : "This source is not playable") +
+                                ", trying raw mp4...";
+                            playerError.style.display = "block";
+                        }
+                        if (o) o.style.display = "block";
+                        return void r(Utils.buildPlayableUrl(mp4, magicOn));
+                    }
+                }
+
+                if (window.MediaProbe) MediaProbe.probeUrl(url, "vegso-proba");
+                if (hadHls) {
+                    if (playerError) {
+                        playerError.textContent = "Cannot start the video this time, please try again later.";
+                        playerError.style.display = "block";
+                    }
+                } else {
+                    if (playerError) {
+                        playerError.textContent = "Cannot start the video this time, please try again later. Transcoding requested.";
+                        playerError.style.display = "block";
+                    }
+                    var q = new XMLHttpRequest();
+                    q.open("HEAD", Utils.buildPlayableUrl(url, true), true);
+                    q.onreadystatechange = function () {
+                        if (4 === q.readyState) console.log("Transcode queued: " + q.status);
+                    };
+                    q.send();
+                }
+            } else {
+                if (playerError) {
+                    playerError.textContent = "Cannot start the video this time, please try again later.";
+                    playerError.style.display = "block";
+                }
+            }
+        }
+
+        function armStall(url) {
+            clearStall();
+            stallTimer = setTimeout(function () {
+                stallTimer = null;
+                if (i.readyState >= 3) return;
+                var rs = i.readyState;
+                console.error("Did not start within 20s (readyState=" + rs + ")");
+                stalledAtZero = (0 === rs);
+                handleMediaError(4, url);
+            }, 20000);
+        }
+
+        function r(url, extra) {
+            console.log("PLAYBACK STARTING [" + (playReason || "primary") + "]");
+            armStall(url);
+            if (-1 === url.indexOf(".m3u8") && window.MediaProbe) {
+                MediaProbe.checkFaststart(url, "konténer");
+            }
+            i.onerror = null;
+            setSources(i, (extra ? [extra] : []).concat([{
+                url: url,
+                type: -1 !== url.indexOf(".m3u8") ? MIME_HLS : MIME_MP4
+            }]));
+            i.volume = 1;
+            i.muted = false;
+            i.onerror = function () {
+                handleMediaError(i.error ? i.error.code : 0, url);
+            };
+            i.load();
+            var p = i.play();
+            if (p && "function" == typeof p.catch) {
+                p.catch(function (err) {
+                    console.error("Play error:", err);
+                });
+            }
+        }
+
+        // Meta info display (date, views, reactions)
+        var uploadDate = "";
+        if (e.meta && e.meta.creation_timestamp) {
+            uploadDate = new Date(e.meta.creation_timestamp * 1000).toLocaleDateString();
+        } else if (e.value && e.value.release_time) {
+            uploadDate = new Date(e.value.release_time * 1000).toLocaleDateString();
+        }
+
+        var clockSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>';
+        var metaDateEl = document.getElementById("meta-date");
+        if (metaDateEl) metaDateEl.innerHTML = uploadDate ? clockSvg + uploadDate : "";
+
+        var metaViewsEl = document.getElementById("meta-views");
+        if (metaViewsEl) metaViewsEl.innerHTML = "";
+
+        var metaReactionsEl = document.getElementById("meta-reactions");
+        if (metaReactionsEl) metaReactionsEl.innerHTML = "";
+
+        var timeDisplayEl = document.getElementById("time-display");
+        if (timeDisplayEl) timeDisplayEl.textContent = "00:00 / 00:00";
+
+        var progressFillEl = document.getElementById("progress-fill");
+        if (progressFillEl) progressFillEl.style.width = "0%";
+
+        var eyeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
+        if (e._cached_views !== undefined && metaViewsEl) {
+            metaViewsEl.innerHTML = eyeSvg + e._cached_views;
+        } else if (e.claim_id) {
+            OdyseeAPI.getViewCount(e.claim_id, function (err, views) {
+                if (!err && metaViewsEl) {
+                    e._cached_views = views;
+                    metaViewsEl.innerHTML = eyeSvg + views;
+                }
+            });
+        }
+
+        var likeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M2 20h2c.55 0 1-.45 1-1v-9c0-.55-.45-1-1-1H2v11zm19.83-7.12c.11-.25.17-.52.17-.8V11c0-1.1-.9-2-2-2h-5.98l1.24-5.22.04-.32c0-.41-.17-.79-.44-1.06L14.28 1 8.14 7.55C7.81 7.89 7.6 8.35 7.6 8.85V19c0 1.1.9 2 2 2h7.97c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-.12z"/></svg>';
+        var dislikeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-left: 12px; margin-right: 4px;"><path d="M22 4h-2c-.55 0-1 .45-1 1v9c0 .55.45 1 1 1h2V4zM2.17 11.12c-.11.25-.17.52-.17.8V13c0 1.1.9 2 2 2h5.98l-1.24 5.22-.04.32c0 .41.17.79.44 1.06L9.72 23l6.14-6.55c.33-.34.54-.8.54-1.3V5c0-1.1-.9-2-2-2H6.43c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v.12z"/></svg>';
+        if (e._cached_reactions && metaReactionsEl) {
+            metaReactionsEl.innerHTML = likeSvg + (e._cached_reactions.like || 0) + dislikeSvg + (e._cached_reactions.dislike || 0);
+        } else if (e.claim_id) {
+            OdyseeAPI.getReactions(e.claim_id, function (err, reactions) {
+                if (!err && reactions && metaReactionsEl) {
+                    e._cached_reactions = reactions;
+                    metaReactionsEl.innerHTML = likeSvg + (reactions.like || 0) + dislikeSvg + (reactions.dislike || 0);
+                }
+            });
+        }
+
+        if (playerError) playerError.style.display = "none";
+        i.setAttribute("data-duration", t);
+        i.innerHTML = "";
+        i.src = "";
+        if (a) a.textContent = e.value.title || "Unknown Title";
+        if (n) n.classList.remove("hidden");
+        if (o) o.style.display = "block";
+
+        function startVideoWithWarmup(rawUrl) {
+            var retries = 0,
+                maxRetries = 6,
+                useMagic = false;
+
+            function fail(msg) {
+                console.error(msg);
+                if (o) o.style.display = "none";
+                if (playerError) {
+                    playerError.textContent = "Cannot start the video this time, please try again later.";
+                    playerError.style.display = "block";
+                }
+                if (a) a.textContent = e.value.title || "Unknown Title";
+            }
+
+            function warm() {
+                var url = Utils.buildPlayableUrl(rawUrl, useMagic),
+                    xhr = new XMLHttpRequest();
+                xhr.open("HEAD", url, true);
+                xhr.timeout = 15000;
+                xhr.onreadystatechange = function () {
+                    if (4 !== xhr.readyState) return;
+                    var s = xhr.status,
+                        cache = "";
+                    try {
+                        cache = xhr.getResponseHeader("X-77-Cache") || "";
+                    } catch (err) { }
+                    console.log("Warmup " + s + (cache ? " cache=" + cache : "") +
+                        (useMagic ? " [magic]" : " [query nelkul]") + " r=" + retries);
+
+                    if (429 === s) return void fail("429: rate limit. Request bypassing CDN cache hit origin. Wait a few minutes.");
+
+                    if (401 === s && !useMagic) {
+                        console.log("401 without query -> trying with magic (warning: cache MISS)");
+                        useMagic = true;
+                        return void warm();
+                    }
+                    if (401 === s) return void fail("401: hotlink protection blocked access even with magic.");
+                    if (404 === s) return void fail("404: stream not found.");
+
+                    if (308 === s && PREFER_HLS) {
+                        var hls = OdyseeAPI.buildHlsUrl(currentClaim);
+                        if (hls) {
+                            hadHls = true;
+                            playReason = "HLS + mp4 fallback, explicit type";
+                            i.dataset.rawUrl = rawUrl;
+                            i.dataset.useMagic = useMagic ? "true" : "false";
+                            return void r(Utils.buildPlayableUrl(rawUrl, useMagic), {
+                                url: hls,
+                                type: MIME_HLS
+                            });
+                        }
+                    }
+                    if ((503 === s || 0 === s || s >= 500) && retries < maxRetries) {
+                        retries++;
+                        return void setTimeout(warm, 3000);
+                    }
+                    playReason = useMagic ? "original mp4, with magic" : "original mp4, without query (cacheable)";
+                    i.dataset.rawUrl = rawUrl;
+                    i.dataset.useMagic = useMagic ? "true" : "false";
+                    r(Utils.buildPlayableUrl(rawUrl, useMagic));
+                };
+                xhr.ontimeout = xhr.onerror = function () {
+                    if (retries < maxRetries) {
+                        retries++;
+                        setTimeout(warm, 3000);
+                    } else {
+                        i.dataset.rawUrl = rawUrl;
+                        i.dataset.useMagic = useMagic ? "true" : "false";
+                        r(Utils.buildPlayableUrl(rawUrl, useMagic));
+                    }
+                };
+                xhr.send();
+            }
+            warm();
+        }
+
+        OdyseeAPI.getStreamingSourceUrl(e, function (t, url) {
+            if (!t && url) {
+                startVideoWithWarmup(url);
+            } else {
+                console.error("Failed to get stream URL via get method.", t);
+                var src = e.reposted_claim || e;
+                var sd = src.value && src.value.source ? src.value.source.sd_hash : "";
+                var cid = src.claim_id;
+                if (sd && cid && src.name) {
+                    var l = "http://player.odycdn.com/api/v4/streams/free/" +
+                        encodeURIComponent(src.name) + "/" + cid + "/" + sd.substring(0, 6);
+                    console.log("Using assembled v4 fallback: " + l);
+                    startVideoWithWarmup(l);
+                } else if (o) o.style.display = "none";
+            }
+        });
+
+        history.pushState({ playerOpen: true }, "player");
+        setTimeout(function () {
+            SpatialNavigation.refresh();
+            for (var e = document.querySelectorAll(".focusable"), t = 0; t < e.length; t++) {
+                if ("btn-play-pause" === e[t].id) {
+                    SpatialNavigation.focusElement(t);
+                    break;
+                }
+            }
+        }, 100);
+    }
+
+    // --- Watchdog: stall detection & reconnection ---
+    var lastTime = 0,
+        stuckCount = 0,
+        isBufferingAllowed = true,
+        reconnectStallTimer = null;
+
+    function clearReconnectStall() {
+        if (reconnectStallTimer) {
+            clearTimeout(reconnectStallTimer);
+            reconnectStallTimer = null;
+        }
+    }
+
+    function stopWatchdog() {
+        if (window._watchdogDelayTimer) { clearTimeout(window._watchdogDelayTimer); window._watchdogDelayTimer = null; }
+        if (window._watchdogInterval) { clearInterval(window._watchdogInterval); window._watchdogInterval = null; }
+        stuckCount = 0;
+    }
+
+    function reconnectStream(savedTime) {
+        var n = document.getElementById("video-player"),
+            c = document.getElementById("player-loading"),
+            playerError = document.getElementById("player-error");
+        if (!n) return;
+
+        stopWatchdog();
+        clearReconnectStall();
+
+        var raw = n.dataset.rawUrl;
+        var useM = n.dataset.useMagic === "true";
+        if (!raw) {
+            console.warn("Watchdog: no rawUrl stored on player dataset");
+            return;
+        }
+
+        var newUrl = Utils.buildPlayableUrl(raw, useM);
+        console.log("Watchdog: reconnecting to " + newUrl + " at time " + (savedTime ? savedTime.toFixed(2) : 0));
+
+        if (c) c.style.display = "block";
+        if (playerError) playerError.style.display = "none";
+        n.style.opacity = "1";
+
+        var wasMuted = n.muted;
+        var needsSeek = (savedTime && savedTime > 0.5);
+        if (needsSeek) {
+            n.muted = true;
+        }
+
+        var isRestored = false;
+
+        function cleanupListeners() {
+            clearReconnectStall();
+            n.removeEventListener("loadedmetadata", onMeta);
+            n.removeEventListener("canplay", onCanPlay);
+            n.removeEventListener("seeked", onSeeked);
+        }
+
+        function restorePlayback() {
+            if (isRestored) return;
+            isRestored = true;
+            cleanupListeners();
+            if (c) c.style.display = "none";
+            n.style.opacity = "1";
+            n.muted = wasMuted;
+
+            var p = n.play();
+            if (p && typeof p.catch === "function") {
+                p.catch(function (err) {
+                    console.error("Watchdog play error:", err);
+                });
+            }
+        }
+
+        function onSeeked() {
+            console.log("Watchdog: seeked to " + n.currentTime.toFixed(2));
+            restorePlayback();
+        }
+
+        function onMeta() {
+            console.log("Watchdog: loadedmetadata fired, duration=" + n.duration);
+            if (needsSeek && Math.abs(n.currentTime - savedTime) > 0.5) {
+                console.log("Watchdog: seeking to " + savedTime.toFixed(2));
+                n.addEventListener("seeked", onSeeked);
+                setTimeout(function () {
+                    if (!isRestored) restorePlayback();
+                }, 2000);
+                try {
+                    n.currentTime = savedTime;
+                } catch (e) {
+                    console.error("Watchdog: error seeking to savedTime", e);
+                    restorePlayback();
+                }
+            } else {
+                restorePlayback();
+            }
+        }
+
+        function onCanPlay() {
+            console.log("Watchdog: canplay fired");
+            if (!needsSeek) {
+                restorePlayback();
+            }
+        }
+
+        // Apply new source directly to video element (avoiding WebKit <source> replacement quirks)
+        function applySource(urlToUse) {
+            console.log("Watchdog: applying direct src. readyState=" + n.readyState + " networkState=" + n.networkState);
+            n.pause();
+            n.innerHTML = "";
+            n.removeAttribute("src");
+            n.addEventListener("loadedmetadata", onMeta);
+            n.addEventListener("canplay", onCanPlay);
+            n.src = urlToUse;
+            n.load();
+        }
+
+        // Perform warmup HEAD with status check & 429 fallback
+        var warmXhr = new XMLHttpRequest();
+        warmXhr.open("HEAD", newUrl, true);
+        warmXhr.timeout = 3000;
+        var handled = false;
+
+        function finishWarmup(url) {
+            if (handled) return;
+            handled = true;
+            applySource(url);
+        }
+
+        warmXhr.onreadystatechange = function () {
+            if (4 !== warmXhr.readyState) return;
+            console.log("Watchdog: warmup HEAD status=" + warmXhr.status);
+            if (429 === warmXhr.status) {
+                console.warn("Watchdog: 429 rate limit hit on CDN! Retrying with cacheable URL (without query)...");
+                var cacheable = Utils.buildPlayableUrl(raw, false);
+                n.dataset.useMagic = "false";
+                finishWarmup(cacheable);
+                return;
+            }
+            if (401 === warmXhr.status) {
+                console.warn("Watchdog: 401 received on warmup. Re-syncing clock...");
+                if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === "function") {
+                    OdyseeAPI.syncServerTime(function () {
+                        var resyncedUrl = Utils.buildPlayableUrl(raw, true);
+                        finishWarmup(resyncedUrl);
+                    });
+                    return;
+                }
+            }
+            finishWarmup(newUrl);
+        };
+
+        warmXhr.ontimeout = warmXhr.onerror = function () {
+            console.warn("Watchdog: warmup HEAD timed out/failed, applying directly");
+            finishWarmup(newUrl);
+        };
+        warmXhr.send();
+
+        // Safety fallback timeout: if neither fires within 8 seconds, retry with alternate mode
+        reconnectStallTimer = setTimeout(function () {
+            if (isRestored) return;
+            console.warn("Watchdog: reconnection stalled 8s (readyState=" + n.readyState + " networkState=" + n.networkState + "). Attempting pipeline recovery...");
+            cleanupListeners();
+            var currentUseMagic = n.dataset.useMagic === "true";
+            var nextUseMagic = !currentUseMagic;
+            n.dataset.useMagic = nextUseMagic ? "true" : "false";
+            var fallbackUrl = Utils.buildPlayableUrl(raw, nextUseMagic);
+            console.log("Watchdog: retrying with " + (nextUseMagic ? "magic" : "cacheable (no magic)") + " -> " + fallbackUrl);
+
+            n.pause();
+            n.innerHTML = "";
+            n.removeAttribute("src");
+            n.addEventListener("loadedmetadata", onMeta);
+            n.addEventListener("canplay", onCanPlay);
+            n.src = fallbackUrl;
+            n.load();
+        }, 15000);
+    }
+
+    function startWatchdogDelayed() {
+        var n = document.getElementById("video-player");
+        if (!n) return;
+        if (window._watchdogInterval) return;
+        stopWatchdog();
+        window._watchdogDelayTimer = setTimeout(function () {
+            console.log("Watchdog: armed after 30s of stable playback");
+            lastTime = n.currentTime;
+            stuckCount = 0;
+            window._watchdogInterval = setInterval(function () {
+                try {
+                    if (n.paused || n.ended || n.seeking) return;
+                    var current = n.currentTime;
+                    if (Math.abs(current - lastTime) < 0.1) {
+                        stuckCount++;
+                        if (stuckCount >= 2) {
+                            console.log("Watchdog: mid-stream stall, reconnecting!");
+                            var savedTime = n.currentTime || lastTime || 0;
+                            reconnectStream(savedTime);
+                        }
+                    } else {
+                        stuckCount = 0;
+                        lastTime = current;
+                    }
+                } catch (e) { }
+            }, 500);
+        }, 30000);
+    }
+
+    function initPlayerUI() {
+        var hideTimer,
+            t = document.getElementById("player-container"),
+            n = document.getElementById("video-player"),
+            i = document.getElementById("btn-play-pause"),
+            o = document.getElementById("player-title"),
+            a = document.getElementById("progress-fill"),
+            r = document.getElementById("time-display"),
+            l = document.getElementById("custom-controls"),
+            c = document.getElementById("player-loading");
+
+        if (!t || !n) return;
+
+        function showControls() {
+            if (!t.classList.contains("hidden")) {
+                if (l) l.classList.remove("fade-out");
+                if (o) o.classList.remove("fade-out");
+                clearTimeout(hideTimer);
+                hideTimer = setTimeout(hideControls, 4000);
+            }
+        }
+
+        function hideControls() {
+            if (!n.paused) {
+                if (l) l.classList.add("fade-out");
+                if (o) o.classList.add("fade-out");
+            }
+        }
+
+        window.addEventListener("keydown", function (e) {
+            if (!t.classList.contains("hidden")) {
+                e.stopPropagation();
+                var wasHidden = l && l.classList.contains("fade-out");
+                showControls();
+                var keyCode = e.keyCode;
+
+                if (keyCode === 13 && wasHidden) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    return;
+                }
+
+                if (415 === keyCode || 19 === keyCode || 179 === keyCode || 13 === keyCode) {
+                    if ((13 === keyCode && "BUTTON" !== document.activeElement.tagName) || 13 !== keyCode) {
+                        if (i) i.click();
+                    }
+                } else if (412 === keyCode || 37 === keyCode || 417 === keyCode || 39 === keyCode) {
+                    try {
+                        var currentTarget = (window._pendingSeekTime !== undefined) ? window._pendingSeekTime : n.currentTime;
+                        var direction = (412 === keyCode || 37 === keyCode) ? -10 : 10;
+                        var maxDuration = isNaN(n.duration) ? currentTarget + 10 + 100 : n.duration;
+                        var newTime = currentTarget + direction;
+                        newTime = Math.max(0, Math.min(maxDuration, newTime));
+
+                        if (window._pendingSeekTime === undefined) {
+                            window._userAction = true;
+                            window._wasPlayingBeforeSeek = !n.paused;
+                            if (!n.paused) n.pause();
+                        }
+
+                        window._pendingSeekTime = newTime;
+
+                        var dur = n.duration;
+                        var dFallback = parseFloat(n.getAttribute("data-duration")) || 0;
+                        if (!dur || isNaN(dur) || dur === Infinity) dur = dFallback;
+                        if (dur > 0) {
+                            if (a) a.style.width = (newTime / dur * 100) + "%";
+                            if (r) r.textContent = Utils.formatDuration(newTime, dur) + " / " + Utils.formatDuration(dur, dur);
+                        }
+
+                        if (window._seekDebounceTimer) clearTimeout(window._seekDebounceTimer);
+                        window._seekDebounceTimer = setTimeout(function () {
+                            try {
+                                if (c) c.style.display = "block";
+                                var seekTarget = window._pendingSeekTime;
+                                window._pendingSeekTime = undefined;
+
+                                if (window._wasPlayingBeforeSeek) {
+                                    var onSeeked = function () {
+                                        n.removeEventListener("seeked", onSeeked);
+                                        window._userAction = true;
+                                        n.play();
+                                        window._wasPlayingBeforeSeek = false;
+                                    };
+                                    n.addEventListener("seeked", onSeeked);
+                                }
+                                n.currentTime = seekTarget;
+                            } catch (err) {
+                                console.error("Delayed seek failed: " + err);
+                            }
+                        }, 400);
+                    } catch (err) {
+                        console.error("Seek calculation failed: " + err);
+                    }
+                } else if (413 === keyCode) {
+                    e.preventDefault();
+                    history.back();
+                } else if (461 !== keyCode && 8 !== keyCode && 27 !== keyCode && 10009 !== keyCode) {
+                    // other keys
+                } else {
+                    e.preventDefault();
+                }
+            }
+        }, true);
+
+        if (i) {
+            i.addEventListener("click", function () {
+                window._userAction = true;
+                if (n.paused) {
+                    n.play();
+                    i.innerHTML = "\u275A\u275A";
+                } else {
+                    n.pause();
+                    i.innerHTML = "\u25B6";
+                    showControls();
+                }
+            });
+        }
+
+        n.addEventListener("play", function () {
+            if (i) i.innerHTML = "\u275A\u275A";
+            showControls();
+            if (window._userAction) {
+                stopWatchdog();
+                window._userAction = false;
+            }
+        });
+
+        n.addEventListener("pause", function () {
+            if (i) i.innerHTML = "\u25B6";
+            showControls();
+            if (window._userAction) {
+                stopWatchdog();
+                window._userAction = false;
+            }
+        });
+
+        n.addEventListener("waiting", function () {
+            if (c) c.style.display = "block";
+            rebuf_start = Date.now();
+            rebuf_count++;
+        });
+
+        n.addEventListener("seeking", function () {
+            if (c) c.style.display = "block";
+            stopWatchdog();
+        });
+
+        n.addEventListener("seeked", function () {
+            if (c) c.style.display = "none";
+        });
+
+        n.addEventListener("playing", function () {
+            if (c) c.style.display = "none";
+            startWatchdogDelayed();
+            if (rebuf_start > 0) {
+                rebuf_duration += Date.now() - rebuf_start;
+                rebuf_start = 0;
+            }
+        });
+
+        n.addEventListener("canplay", function () {
+            if (c) c.style.display = "none";
+            var errEl = document.getElementById("player-error");
+            if (errEl) errEl.style.display = "none";
+            clearStall();
+            console.log("Can play. Player selected: " + (n.currentSrc || "(unknown)"));
+        });
+
+        n.addEventListener("error", function () {
+            var cur = n.currentTime || 0;
+            var errCode = n.error ? n.error.code : "unknown";
+            console.error("Video error event: code=" + errCode + " on " + (n.currentSrc || ""));
+            if (cur > 5 && !n.seeking && window._pendingSeekTime === undefined) {
+                console.log("Watchdog: mid-stream error event at " + cur.toFixed(2) + "s -> instant reconnect!");
+                reconnectStream(cur);
+            } else {
+                if (c) c.style.display = "none";
+            }
+        });
+
+        n.addEventListener("ended", function () {
+            stopWatchdog();
+            var cur = n.currentTime || 0,
+                dur = n.duration,
+                dFallback = parseFloat(n.getAttribute("data-duration")) || 0;
+            if (!dur || isNaN(dur) || dur === Infinity) dur = dFallback;
+
+            if (dur > 0 && (dur - cur) > 5) {
+                console.log("Premature end detected (" + cur + " / " + dur + "). Auto-reconnecting...");
+                reconnectStream(cur);
+                return;
+            }
+            var rel = dur > 0 ? (cur / dur * 100) : 0;
+            if (window.OdyseeAPI && typeof OdyseeAPI.reportWatchmanPlayback === "function") {
+                OdyseeAPI.reportWatchmanPlayback(n.currentSrc || "", dur, cur, rel, rebuf_count, rebuf_duration);
+            }
+            closePlayer();
+        });
+
+        n.addEventListener("timeupdate", function () {
+            try {
+                if (window._pendingSeekTime !== undefined) return;
+                var cur = n.currentTime || 0,
+                    dur = n.duration,
+                    dFallback = parseFloat(n.getAttribute("data-duration")) || 0;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = dFallback;
+                var pct = 0;
+                if (dur && !isNaN(dur) && dur > 0) pct = (cur / dur * 100);
+                if (a) a.style.width = pct + "%";
+                if (r) r.textContent = Utils.formatDuration(cur, dur) + " / " + Utils.formatDuration(dur, dur);
+
+                var now = Date.now();
+                if (now - last_progress_report >= 10000) {
+                    last_progress_report = now;
+                    var cClaim = window._activeClaim;
+                    if (cClaim && cClaim.claim_id && window.OdyseeAPI && typeof OdyseeAPI.saveViewProgress === "function") {
+                        var uri = cClaim.canonical_url || cClaim.permanent_url || cClaim.short_url || "";
+                        OdyseeAPI.saveViewProgress(cClaim.claim_id, uri, cur);
+                    }
+                }
+            } catch (err) { }
+        });
+    }
+
+    return {
+        playVideo: function (claim) {
+            window._activeClaim = claim;
+            playVideo(claim);
+        },
+        close: closePlayer,
+        stopWatchdog: stopWatchdog,
+        initUI: initPlayerUI
+    };
+})();
+
+// Global backwards-compatibility aliases
+var playVideo = Player.playVideo;
+var closePlayer = Player.close;
+window.stopWatchdog = Player.stopWatchdog;
