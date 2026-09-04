@@ -27,7 +27,7 @@ var Navigation = (function () {
         if (!img) return;
         if (window.Auth && Auth.isLoggedIn()) {
             var rawAvatar = Auth.getAvatarUrl();
-            var processed = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(rawAvatar, 120) : rawAvatar;
+            var processed = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(rawAvatar, 160) : rawAvatar;
             img.src = processed;
             img.className = "logo-img user-avatar";
         } else {
