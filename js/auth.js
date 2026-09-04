@@ -229,136 +229,73 @@ var Auth = (function () {
     }
 
     function fetchOdyseeProfile(cb) {
-        var xhr = new XMLHttpRequest();
-        xhr.open("POST", ROOT_API + "/user/me", true);
-        xhr.setRequestHeader("Authorization", "Bearer " + state.accessToken);
-        xhr.timeout = 15000;
+        LbryIo.call("/user/me", { method: "POST" }, function (err, res) {
+            if (!err && res && res.data) {
+                var d = res.data;
+                if (d.primary_email && !state.user.email) state.user.email = d.primary_email;
+                if (d.auth_token) window.odyseeAuthToken = d.auth_token;
 
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        var res = JSON.parse(xhr.responseText);
-                        var d = res.data || {};
-                        if (d.primary_email && !state.user.email) state.user.email = d.primary_email;
-                        if (d.auth_token) window.odyseeAuthToken = d.auth_token;
-
-                        // Query channels
-                        fetchUserChannel(function () {
-                            fetchMembershipsAndPurchases();
-                            if (cb) cb();
-                        });
-                        return;
-                    } catch (e) {
-                        console.error("Auth: user/me parse error", e);
-                    }
-                }
-                if (cb) cb();
+                // Query channels & memberships
+                fetchUserChannel(function () {
+                    fetchMembershipsAndPurchases();
+                    if (cb) cb();
+                });
+                return;
             }
-        };
-
-        xhr.ontimeout = xhr.onerror = function () {
             if (cb) cb();
-        };
-
-        xhr.send();
+        });
     }
 
     function fetchUserChannel(cb) {
-        // Query claim_search for channel claims owned by this user
-        var xhr = new XMLHttpRequest();
-        xhr.open("POST", "https://api.na-backend.odysee.com/api/v1/proxy", true);
-        xhr.setRequestHeader("Content-Type", "application/json-rpc");
-        xhr.setRequestHeader("Authorization", "Bearer " + state.accessToken);
-        xhr.timeout = 15000;
-
-        var payload = {
-            jsonrpc: "2.0",
-            method: "channel_list",
-            params: { page_size: 1 },
-            id: 1
-        };
-
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    try {
-                        var res = JSON.parse(xhr.responseText);
-                        if (res.result && res.result.items && res.result.items.length > 0) {
-                            var ch = res.result.items[0];
-                            state.user.channelName = ch.name || state.user.channelName;
-                            state.user.channelClaimId = ch.claim_id || "";
-                            if (ch.value && ch.value.thumbnail && ch.value.thumbnail.url) {
-                                state.user.avatarUrl = ch.value.thumbnail.url;
-                            }
-
-                            // Fetch subscriber count
-                            if (state.user.channelClaimId && window.OdyseeAPI && OdyseeAPI.getSubscriberCount) {
-                                OdyseeAPI.getSubscriberCount(state.user.channelClaimId, function (err, count) {
-                                    if (!err && typeof count === "number") {
-                                        state.user.followers = count;
-                                        savePersistedSession();
-                                        notifyListeners();
-                                    }
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Auth: channel_list parse error", e);
-                    }
+        LbryRpc.call("channel_list", { page_size: 1 }, function (err, result) {
+            if (!err && result && result.items && result.items.length > 0) {
+                var ch = result.items[0];
+                state.user.channelName = ch.name || state.user.channelName;
+                state.user.channelClaimId = ch.claim_id || "";
+                if (ch.value && ch.value.thumbnail && ch.value.thumbnail.url) {
+                    state.user.avatarUrl = ch.value.thumbnail.url;
                 }
-                savePersistedSession();
-                if (cb) cb();
+
+                // Fetch subscriber count via LbryIo without circular OdyseeAPI dependency
+                if (state.user.channelClaimId) {
+                    LbryIo.call("/subscription/sub_count", { data: { claim_id: state.user.channelClaimId } }, function (subErr, subRes) {
+                        if (!subErr && subRes && subRes.data && subRes.data.length > 0 && typeof subRes.data[0] === "number") {
+                            state.user.followers = subRes.data[0];
+                            savePersistedSession();
+                            notifyListeners();
+                        }
+                    });
+                }
             }
-        };
-
-        xhr.ontimeout = xhr.onerror = function () {
+            savePersistedSession();
             if (cb) cb();
-        };
-
-        xhr.send(JSON.stringify(payload));
+        });
     }
 
     function fetchMembershipsAndPurchases() {
         if (!state.accessToken) return;
 
-        // Fetch memberships
-        var xhrM = new XMLHttpRequest();
-        xhrM.open("GET", ROOT_API + "/membership_v2/list", true);
-        xhrM.setRequestHeader("Authorization", "Bearer " + state.accessToken);
-        xhrM.onreadystatechange = function () {
-            if (xhrM.readyState === 4 && xhrM.status === 200) {
-                try {
-                    var res = JSON.parse(xhrM.responseText);
-                    var items = res.data || [];
-                    state.memberships = [];
-                    for (var i = 0; i < items.length; i++) {
-                        if (items[i].channel_id) state.memberships.push(items[i].channel_id);
-                    }
-                    savePersistedSession();
-                } catch (e) { }
+        LbryIo.call("/membership_v2/list", { method: "GET" }, function (err, res) {
+            if (!err && res && res.data) {
+                var items = res.data || [];
+                state.memberships = [];
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].channel_id) state.memberships.push(items[i].channel_id);
+                }
+                savePersistedSession();
             }
-        };
-        xhrM.send();
+        });
 
-        // Fetch purchases
-        var xhrP = new XMLHttpRequest();
-        xhrP.open("GET", ROOT_API + "/purchase/list", true);
-        xhrP.setRequestHeader("Authorization", "Bearer " + state.accessToken);
-        xhrP.onreadystatechange = function () {
-            if (xhrP.readyState === 4 && xhrP.status === 200) {
-                try {
-                    var res = JSON.parse(xhrP.responseText);
-                    var items = res.data || [];
-                    state.purchases = [];
-                    for (var i = 0; i < items.length; i++) {
-                        if (items[i].claim_id) state.purchases.push(items[i].claim_id);
-                    }
-                    savePersistedSession();
-                } catch (e) { }
+        LbryIo.call("/purchase/list", { method: "GET" }, function (err, res) {
+            if (!err && res && res.data) {
+                var items = res.data || [];
+                state.purchases = [];
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].claim_id) state.purchases.push(items[i].claim_id);
+                }
+                savePersistedSession();
             }
-        };
-        xhrP.send();
+        });
     }
 
     return {
