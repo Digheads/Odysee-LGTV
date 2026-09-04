@@ -210,8 +210,13 @@ var Feed = (function () {
         hasMore = true;
         isLoading = true;
 
+        if (window.SpatialNavigation && typeof SpatialNavigation.lock === "function") {
+            SpatialNavigation.lock();
+        }
+
         if (t.innerHTML = "", n.style.display = "block", "nav-search" === e) {
             isLoading = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
             Utils.setDisplayFlex(o);
             n.style.display = "none";
             SpatialNavigation.refresh();
@@ -226,6 +231,7 @@ var Feed = (function () {
         if ("nav-login" === e) {
             isLoading = false;
             hasMore = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
             o.style.display = "none";
             n.style.display = "none";
             renderLoginView(t);
@@ -235,6 +241,7 @@ var Feed = (function () {
         if ("nav-profile" === e) {
             isLoading = false;
             hasMore = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
             o.style.display = "none";
             n.style.display = "none";
             renderProfileView(t);
@@ -244,6 +251,9 @@ var Feed = (function () {
         function r(err, res) {
             isLoading = false;
             n.style.display = "none";
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") {
+                SpatialNavigation.unlock();
+            }
             if (err) {
                 var msg = err.message || ("string" == typeof err ? err : JSON.stringify(err));
                 t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. ' + msg + "</div>";
@@ -263,14 +273,14 @@ var Feed = (function () {
             SpatialNavigation.refresh();
             if (currentPage === 1) {
                 setTimeout(function () {
-                    if (isAppStartup) {
-                        isAppStartup = false;
+                    var firstVideo = t.querySelector(".video-card");
+                    if (firstVideo) {
+                        SpatialNavigation.focusNode(firstVideo);
+                    } else {
                         var activeMenu = document.querySelector(".nav-item.active");
                         if (activeMenu) SpatialNavigation.focusNode(activeMenu);
-                    } else {
-                        var firstVideo = t.querySelector(".video-card");
-                        if (firstVideo) SpatialNavigation.focusNode(firstVideo);
                     }
+                    isAppStartup = false;
                 }, 100);
             }
         }

@@ -1,7 +1,8 @@
 var SpatialNavigation = function () {
     var e = [],
         t = -1,
-        lastFocusedEl = null;
+        lastFocusedEl = null,
+        isLocked = false;
 
     function a() {
         var a = document.querySelectorAll(".focusable");
@@ -54,6 +55,12 @@ var SpatialNavigation = function () {
     }
 
     function i(a) {
+        if (isLocked) {
+            if ((a.keyCode >= 37 && a.keyCode <= 40) || a.keyCode === 13) {
+                a.preventDefault();
+                return;
+            }
+        }
         if (0 !== e.length) {
             var i = e[t];
             if (i) {
@@ -148,9 +155,17 @@ var SpatialNavigation = function () {
         init: function () {
             a(), e.length > 0 && n(0), window.addEventListener("keydown", i);
             window.addEventListener("keypress", function(ev) {
+                if (isLocked) {
+                    ev.preventDefault();
+                    return;
+                }
                 if (ev.keyCode === 13) ev.preventDefault();
             });
             window.addEventListener("keyup", function(ev) {
+                if (isLocked) {
+                    ev.preventDefault();
+                    return;
+                }
                 if (ev.keyCode === 13) {
                     ev.preventDefault();
                     if (window._spatialOkIsDown) {
@@ -178,20 +193,30 @@ var SpatialNavigation = function () {
                 }
             });
             document.addEventListener("mouseover", (function (a) {
+                if (isLocked) return;
                 for (var c = a.target; c && c !== document;) {
                     if (c.classList && c.classList.contains("focusable")) {
                         var i = e.indexOf(c); - 1 !== i && i !== t && n(i);
-                        break
+                        break;
                     }
-                    c = c.parentNode
+                    c = c.parentNode;
                 }
-            }))
+            }));
         },
         refresh: a,
         focusElement: n,
         focusNode: function(node) {
             var idx = e.indexOf(node);
             if (idx !== -1) n(idx);
+        },
+        lock: function() {
+            isLocked = true;
+        },
+        unlock: function() {
+            isLocked = false;
+        },
+        isLocked: function() {
+            return isLocked;
         }
     }
 }();

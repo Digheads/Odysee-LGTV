@@ -42,6 +42,22 @@
 
 // 2. Application initialization on DOMContentLoaded
 document.addEventListener("DOMContentLoaded", function () {
+    SpatialNavigation.init();
+    SpatialNavigation.lock();
+
+    var initialTrending = document.querySelector(".nav-item[data-id='nav-trending']");
+    if (initialTrending) {
+        SpatialNavigation.focusNode(initialTrending);
+    }
+
+    // Safety fallback: unlock navigation after 15s in case network stalls
+    setTimeout(function () {
+        if (SpatialNavigation.isLocked && SpatialNavigation.isLocked()) {
+            console.warn("Safety fallback: unlocking SpatialNavigation");
+            SpatialNavigation.unlock();
+        }
+    }, 15000);
+
     // Clock sync first, load only afterwards: otherwise the `magic` parameter
     // would be invalid with a drifted TV clock and we'd get 401.
     if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === "function") {
@@ -51,6 +67,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (err) console.error("Failed to load categories: " + err.message);
                     Navigation.buildNav(sections || []);
                     SpatialNavigation.refresh();
+                    var trendingItem = document.querySelector(".nav-item[data-id='nav-trending']");
+                    if (trendingItem) {
+                        SpatialNavigation.focusNode(trendingItem);
+                    }
                     Feed.loadPage("nav-trending");
                 });
             }
@@ -66,7 +86,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    SpatialNavigation.init();
     Navigation.bindNav();
     Feed.initSearch();
     Player.initUI();
