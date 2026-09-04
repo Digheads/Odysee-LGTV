@@ -83,13 +83,13 @@ body {
     display: flex;
     -webkit-align-items: center;
     align-items: center;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 600;
-    padding: 20px 20px;
-    margin-bottom: 10px;
-    border-radius: 16px;
+    padding: 11px 18px;
+    margin-bottom: 4px;
+    border-radius: 12px;
     color: #9CA3AF;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
 }
 
 .nav-item.active {
@@ -640,20 +640,31 @@ body {
 .login-status {
     font-size: 22px;
     color: #D1D5DB;
-    margin-top: 10px;
+    margin-top: 15px;
+    text-align: center;
+    line-height: 28px;
+}
+
+.login-status-text {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 28px;
 }
 
 .login-spinner {
     display: inline-block;
     width: 20px;
     height: 20px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     border-top-color: #E2225E;
     -webkit-animation: spin 1s ease-in-out infinite;
     animation: spin 1s ease-in-out infinite;
-    vertical-align: middle;
-    margin-right: 10px;
+    margin-right: 12px;
+    box-sizing: border-box;
+    vertical-align: -4px;
+    position: relative;
+    top: 10px;
 }
 
 .btn-login-action {

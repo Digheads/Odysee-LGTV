@@ -85,8 +85,19 @@ var SpatialNavigation = function () {
                 }
 
                 if (a.keyCode === 39 && i.classList.contains("nav-item")) {
+                    if (window.isChannelPageOpen) {
+                        var cpHeader = document.getElementById("cp-header");
+                        if (cpHeader) {
+                            var cpIdx = e.indexOf(cpHeader);
+                            if (cpIdx !== -1) {
+                                a.preventDefault();
+                                n(cpIdx);
+                                return;
+                            }
+                        }
+                    }
                     for (var k = 0; k < e.length; k++) {
-                        if (e[k].classList.contains("video-card") || e[k].id === "search-input" || e[k].id === "btn-search") {
+                        if (e[k].classList.contains("video-card") || e[k].id === "search-input" || e[k].id === "btn-search" || e[k].id === "cp-header") {
                             a.preventDefault();
                             n(k);
                             return;
@@ -94,10 +105,12 @@ var SpatialNavigation = function () {
                     }
                 }
                 var isVideoCard = i.classList.contains("video-card");
+                var isChannelHeader = i.id === "cp-header" || i.classList.contains("channel-header");
                 for (var o = c(i), s = -1, r = 1 / 0, f = 0; f < e.length; f++)
                     if (f !== t) {
                         if (isVideoCard && (a.keyCode === 37 || a.keyCode === 39) && (e[f].id === "search-input" || e[f].id === "btn-search")) continue;
                         if (isVideoCard && a.keyCode !== 37 && e[f].classList.contains("nav-item")) continue;
+                        if (isChannelHeader && a.keyCode === 37 && e[f].classList.contains("video-card")) continue;
                         
                         var l = c(e[f]),
                             h = l.cx - o.cx,

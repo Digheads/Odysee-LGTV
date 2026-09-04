@@ -152,7 +152,6 @@ var Player = (function () {
                         playReason = "raw mp4 fallback (previous source error code: " + code + ")";
                         console.log("FALLBACK REASON: " + (hadHls ? "HLS" : "v4") +
                             " source failed with error " + code + " -> raw mp4: " + mp4);
-                        if (window.MediaProbe) MediaProbe.probeUrl(Utils.buildPlayableUrl(mp4, magicOn), "mp4-proba");
                         if (playerError) {
                             playerError.textContent = (hadHls ? "HLS is not playable" : "This source is not playable") +
                                 ", trying raw mp4...";
@@ -163,7 +162,6 @@ var Player = (function () {
                     }
                 }
 
-                if (window.MediaProbe) MediaProbe.probeUrl(url, "vegso-proba");
                 if (hadHls) {
                     if (playerError) {
                         playerError.textContent = "Cannot start the video this time, please try again later.";
@@ -204,9 +202,6 @@ var Player = (function () {
         function r(url, extra) {
             console.log("PLAYBACK STARTING [" + (playReason || "primary") + "]");
             armStall(url);
-            if (-1 === url.indexOf(".m3u8") && window.MediaProbe) {
-                MediaProbe.checkFaststart(url, "konténer");
-            }
             i.onerror = null;
             setSources(i, (extra ? [extra] : []).concat([{
                 url: url,

@@ -26,15 +26,10 @@ var Navigation = (function () {
         var img = document.getElementById("logo-img");
         if (!img) return;
         if (window.Auth && Auth.isLoggedIn()) {
-            var user = Auth.getUser();
-            if (user && user.avatarUrl) {
-                var jpgAvatar = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(user.avatarUrl, 120) : user.avatarUrl;
-                img.src = jpgAvatar;
-                img.className = "logo-img user-avatar";
-            } else {
-                img.src = "icons/icon.png";
-                img.className = "logo-img";
-            }
+            var rawAvatar = Auth.getAvatarUrl();
+            var processed = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(rawAvatar, 120) : rawAvatar;
+            img.src = processed;
+            img.className = "logo-img user-avatar";
         } else {
             img.src = "icons/icon.png";
             img.className = "logo-img";
@@ -58,10 +53,25 @@ var Navigation = (function () {
         }
     }
 
+    function setActive(id) {
+        var all = document.querySelectorAll(".nav-item");
+        for (var j = 0; j < all.length; j++) {
+            if (all[j].getAttribute("data-id") === id) {
+                all[j].classList.add("active");
+            } else {
+                all[j].classList.remove("active");
+            }
+        }
+    }
+
     function buildNav(sections) {
         if (sections) navSections = sections;
         var ul = document.querySelector(".nav-links");
         if (!ul) return;
+
+        var currentActiveEl = document.querySelector(".nav-item.active");
+        var activeId = currentActiveEl ? currentActiveEl.getAttribute("data-id") : (window.Feed && typeof Feed.getCurrentCategory === "function" ? Feed.getCurrentCategory() : "nav-trending");
+        if (!activeId) activeId = "nav-trending";
 
         var items = [];
         if (window.Auth && Auth.isLoggedIn()) {
@@ -81,7 +91,7 @@ var Navigation = (function () {
         ul.innerHTML = "";
         for (var j = 0; j < items.length; j++) {
             var li = document.createElement("li");
-            li.className = "focusable nav-item" + (items[j].id === "nav-trending" ? " active" : "");
+            li.className = "focusable nav-item" + (items[j].id === activeId ? " active" : "");
             li.setAttribute("data-id", items[j].id);
             var escLabel = (window.Utils && Utils.escapeHtml) ? Utils.escapeHtml(items[j].label) : items[j].label;
             li.innerHTML = getNavIcon(items[j].id) + '<span>' + escLabel + '</span>';
@@ -108,6 +118,7 @@ var Navigation = (function () {
         sectionLabel: sectionLabel,
         bindNav: bindNav,
         buildNav: buildNav,
+        setActive: setActive,
         updateLogoAvatar: updateLogoAvatar
     };
 })();

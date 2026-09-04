@@ -14,7 +14,7 @@ var http = require("http"),
     path = require("path"),
     os = require("os");
 
-var PORT = parseInt(process.argv[2], 10) || 3000,
+var PORT = parseInt(process.argv[2], 10) || 5000,
     ROOT = __dirname,
     LOGFILE = path.join(ROOT, "devlog.txt");
 

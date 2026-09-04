@@ -52,9 +52,9 @@ var Feed = (function () {
             '<p class="login-step">1. Go to the following address on your phone or computer:</p>' +
             '<div class="login-url">odysee.com/$/activate</div>' +
             '<p class="login-step">2. Enter this activation code:</p>' +
-            '<div class="login-code-box" id="login-code-box">Request code...</div>' +
+            '<div class="login-code-box" id="login-code-box">....-....</div>' +
             '<div class="login-status" id="login-status-box">' +
-            '<span class="login-spinner"></span> Waiting for confirmation on your phone...' +
+            '<span class="login-spinner"></span><span class="login-status-text">Waiting for confirmation on your device...</span>' +
             '</div>' +
             '<button class="focusable btn-login-action" id="btn-login-refresh" style="display:none;">Request a new code</button>' +
             '</div>';
@@ -96,10 +96,8 @@ var Feed = (function () {
         var user = (window.Auth && Auth.getUser) ? Auth.getUser() : {};
         var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : { hideMature: true, hideMembersOnly: false, hideYoutube: false };
 
-        var avatarSrc = "icons/icon.png";
-        if (user.avatarUrl) {
-            avatarSrc = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(user.avatarUrl, 160) : user.avatarUrl;
-        }
+        var rawAvatar = (window.Auth && Auth.getAvatarUrl) ? Auth.getAvatarUrl() : (user.avatarUrl || "icons/icon.png");
+        var avatarSrc = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(rawAvatar, 160) : rawAvatar;
 
         var displayName = user.channelName || (user.email ? user.email.split("@")[0] : "Odysee User");
         if (0 !== displayName.indexOf("@") && user.channelName) displayName = "@" + displayName;
@@ -199,6 +197,11 @@ var Feed = (function () {
     }
 
     function loadPage(e) {
+        if (window.isChannelPageOpen && window.Channel && typeof Channel.close === "function") {
+            Channel.close(true);
+            try { history.replaceState(null, "", ""); } catch (err) { }
+        }
+
         var t = document.getElementById("video-grid"),
             n = document.getElementById("loading"),
             o = document.getElementById("search-container"),
@@ -209,6 +212,10 @@ var Feed = (function () {
         currentSearchQuery = '';
         hasMore = true;
         isLoading = true;
+
+        if (window.Navigation && typeof Navigation.setActive === "function") {
+            Navigation.setActive(e);
+        }
 
         if (window.SpatialNavigation && typeof SpatialNavigation.lock === "function") {
             SpatialNavigation.lock();
@@ -532,7 +539,10 @@ var Feed = (function () {
         loadMoreContent: loadMoreContent,
         createVideoCard: createVideoCard,
         releaseOffscreenThumbs: releaseOffscreenThumbs,
-        initSearch: initSearch
+        initSearch: initSearch,
+        getCurrentCategory: function () {
+            return currentCategory;
+        }
     };
 })();
 

@@ -11,7 +11,7 @@ var Channel = (function () {
     window.lastFocusedCard = null;
     window.lastFocusedChannelCard = null;
 
-    function close() {
+    function close(dontRestoreFocus) {
         if (!window.isChannelPageOpen) return;
         window.isChannelPageOpen = false;
         var cp = document.getElementById("channel-page");
@@ -22,10 +22,13 @@ var Channel = (function () {
         if (topHeader) topHeader.style.display = "block";
 
         SpatialNavigation.refresh();
-        if (window.lastFocusedCard) {
-            SpatialNavigation.focusNode(window.lastFocusedCard);
-        } else {
-            SpatialNavigation.focusNode(document.querySelector(".video-card"));
+        if (!dontRestoreFocus) {
+            if (window.lastFocusedCard) {
+                SpatialNavigation.focusNode(window.lastFocusedCard);
+            } else {
+                var firstCard = document.querySelector(".video-card");
+                if (firstCard) SpatialNavigation.focusNode(firstCard);
+            }
         }
     }
 
@@ -89,7 +92,10 @@ var Channel = (function () {
                     if (i === 0 && card) {
                         card.id = "cp-first-video";
                         var header = document.getElementById("cp-header");
-                        if (header) header.setAttribute("data-sn-down", "#cp-first-video");
+                        if (header) {
+                            header.setAttribute("data-sn-down", "#cp-first-video");
+                            header.setAttribute("data-sn-left", ".nav-item.active");
+                        }
                     }
                     if (card && grid) grid.appendChild(card);
                 }

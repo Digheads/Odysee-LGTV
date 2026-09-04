@@ -11,6 +11,7 @@ var Auth = (function () {
     var USERINFO_URL = SSO_BASE + "/auth/realms/Users/protocol/openid-connect/userinfo";
     var REVOKE_URL = SSO_BASE + "/auth/realms/Users/protocol/openid-connect/revoke";
     var ROOT_API = "https://api.odysee.com";
+    var DEFAULT_AVATAR = "https://thumbnails.odycdn.com/optimize/s:160:160/quality:85/plain/https://spee.ch/spaceman-png:2.png";
 
     var state = {
         accessToken: null,
@@ -54,7 +55,9 @@ var Auth = (function () {
             state.expiresAt = parseInt(localStorage.getItem("odysee_auth_expires_at") || "0", 10);
 
             var u = localStorage.getItem("odysee_auth_user");
-            if (u) state.user = JSON.parse(u);
+            if (u) {
+                state.user = JSON.parse(u);
+            }
 
             var s = localStorage.getItem("odysee_auth_settings");
             if (s) {
@@ -195,6 +198,7 @@ var Auth = (function () {
                         var data = JSON.parse(xhr.responseText);
                         state.user.email = data.email || "";
                         state.user.userId = data.sub || "";
+                        if (data.picture) state.user.avatarUrl = data.picture;
                         if (data.preferred_username && !state.user.channelName) {
                             state.user.channelName = data.preferred_username;
                         }
@@ -247,13 +251,21 @@ var Auth = (function () {
     }
 
     function fetchUserChannel(cb) {
-        LbryRpc.call("channel_list", { page_size: 1 }, function (err, result) {
+        LbryRpc.call("channel_list", { page_size: 20 }, function (err, result) {
             if (!err && result && result.items && result.items.length > 0) {
+                state.user.channelClaimIds = [];
+                for (var ci = 0; ci < result.items.length; ci++) {
+                    if (result.items[ci].claim_id) {
+                        state.user.channelClaimIds.push(result.items[ci].claim_id);
+                    }
+                }
                 var ch = result.items[0];
                 state.user.channelName = ch.name || state.user.channelName;
                 state.user.channelClaimId = ch.claim_id || "";
                 if (ch.value && ch.value.thumbnail && ch.value.thumbnail.url) {
                     state.user.avatarUrl = ch.value.thumbnail.url;
+                } else if (!state.user.avatarUrl) {
+                    state.user.avatarUrl = DEFAULT_AVATAR;
                 }
 
                 // Fetch subscriber count via LbryIo without circular OdyseeAPI dependency
@@ -333,6 +345,23 @@ var Auth = (function () {
 
         getUser: function () {
             return state.user;
+        },
+
+        getAvatarUrl: function () {
+            if (state.user && state.user.avatarUrl) {
+                return state.user.avatarUrl;
+            }
+            return DEFAULT_AVATAR;
+        },
+
+        getChannelClaimIds: function () {
+            if (state.user && state.user.channelClaimIds && state.user.channelClaimIds.length > 0) {
+                return state.user.channelClaimIds;
+            }
+            if (state.user && state.user.channelClaimId) {
+                return [state.user.channelClaimId];
+            }
+            return [];
         },
 
         getSettings: function () {
