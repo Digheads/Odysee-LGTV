@@ -46,12 +46,23 @@ document.addEventListener("DOMContentLoaded", function () {
     // would be invalid with a drifted TV clock and we'd get 401.
     if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === "function") {
         OdyseeAPI.syncServerTime(function () {
-            OdyseeAPI.getSections(function (err, sections) {
-                if (err) console.error("Failed to load categories: " + err.message);
-                Navigation.buildNav(sections || []);
-                SpatialNavigation.refresh();
-                Feed.loadPage("nav-trending");
-            });
+            function proceed() {
+                OdyseeAPI.getSections(function (err, sections) {
+                    if (err) console.error("Failed to load categories: " + err.message);
+                    Navigation.buildNav(sections || []);
+                    SpatialNavigation.refresh();
+                    Feed.loadPage("nav-trending");
+                });
+            }
+
+            if (window.Auth && typeof Auth.init === "function") {
+                Auth.init(function (isLoggedIn) {
+                    console.log("App bootstrap: Auth initialized, loggedIn=" + isLoggedIn);
+                    proceed();
+                });
+            } else {
+                proceed();
+            }
         });
     }
 

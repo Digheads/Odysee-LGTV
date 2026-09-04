@@ -54,21 +54,52 @@ var OdyseeAPI = function () {
     // Therefore it's NOT worth trying for these: the problem is not magic/hotlink.
     function protectedReason(claim) {
         var tags = (claim.value && claim.value.tags) ? claim.value.tags : [],
-            fixed = {
-                "c:members-only": "Members-only content.",
-                "c:rental": "Rental content.",
-                "c:purchase": "Purchasable content.",
-                "c:unlisted": "Unlisted content."
-            },
             releaseTime = (claim.value && claim.value.release_time) ? +claim.value.release_time : 0,
-            nowSec = Math.floor((new Date().getTime() + serverTimeOffsetMs) / 1000);
+            nowSec = Math.floor((new Date().getTime() + serverTimeOffsetMs) / 1000),
+            claimId = claim.claim_id || "",
+            channelId = claim.signing_channel ? claim.signing_channel.claim_id : (claim.channel_id || "");
+
+        var settings = (window.Auth && typeof Auth.getSettings === "function") ?
+            Auth.getSettings() : { hideMature: true, hideMembersOnly: false, hideYoutube: false };
+
         for (var i = 0; i < tags.length; i++) {
             var t = tags[i];
-            if (fixed[t]) return fixed[t];
-            if (0 === t.indexOf("purchase:")) return "Purchasable content.";
-            if (0 === t.indexOf("rental:")) return "Rental content.";
-            if (("c:scheduled:show" === t || "c:scheduled:hide" === t) && releaseTime > nowSec)
+
+            // Scheduled content check
+            if (("c:scheduled:show" === t || "c:scheduled:hide" === t) && releaseTime > nowSec) {
                 return "Scheduled content, not yet released.";
+            }
+
+            // Mature content filter
+            if (settings.hideMature && (t === "mature" || t === "nsfw" || t === "c:nsfw" || t === "c:mature")) {
+                return "Mature content.";
+            }
+
+            // Synced YouTube filter
+            if (settings.hideYoutube && (t === "c:you-tube" || t === "you-tube" || t === "c:youtube" || t === "youtube")) {
+                return "Synced YouTube content.";
+            }
+
+            // Members-only check: if user is member of this channel, allow!
+            if (t === "c:members-only") {
+                if (window.Auth && Auth.isMemberOf && Auth.isMemberOf(channelId)) {
+                    continue; // User has membership, unlock!
+                }
+                if (settings.hideMembersOnly) return "Members-only content.";
+                return "Members-only content.";
+            }
+
+            // Purchase / rental check: if user purchased this claim, allow!
+            if (t === "c:purchase" || t === "c:rental" || 0 === t.indexOf("purchase:") || 0 === t.indexOf("rental:")) {
+                if (window.Auth && Auth.hasPurchased && Auth.hasPurchased(claimId)) {
+                    continue; // User purchased, unlock!
+                }
+                return "Purchasable content.";
+            }
+
+            if (t === "c:unlisted") {
+                return "Unlisted content.";
+            }
         }
         return null;
     }
@@ -122,7 +153,11 @@ var OdyseeAPI = function () {
         "get" === e && (n += "?m=get");
         console.log("OdyseeAPI: [" + e + "] Request. Params: " + JSON.stringify(t));
         var s = new XMLHttpRequest;
-        s.open("POST", n, !0), s.setRequestHeader("Content-Type", "application/json-rpc"), s.timeout = 2e4, s.ontimeout = function () {
+        s.open("POST", n, !0), s.setRequestHeader("Content-Type", "application/json-rpc");
+        if (window.Auth && typeof Auth.getAccessToken === "function" && Auth.getAccessToken()) {
+            s.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
+        }
+        s.timeout = 2e4, s.ontimeout = function () {
             retryOrFail(new Error("Timeout: cannot reach " + n))
         }, s.onreadystatechange = function () {
             if (4 === s.readyState)
@@ -359,6 +394,9 @@ var OdyseeAPI = function () {
             attempt()
         },
         ensureAuthToken: function(cb) {
+            if (window.Auth && typeof Auth.getAccessToken === "function" && Auth.getAccessToken()) {
+                return cb(Auth.getAccessToken());
+            }
             if (window.odyseeAuthToken) {
                 cb(window.odyseeAuthToken);
             } else {
@@ -439,8 +477,184 @@ var OdyseeAPI = function () {
                 var xhr = new XMLHttpRequest();
                 xhr.open("POST", "https://api.odysee.com/file/view", true);
                 xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-                xhr.send("auth_token=" + token + "&claim_id=" + encodeURIComponent(claimId) + "&uri=" + encodeURIComponent(uri) + "&last_timestamp=" + Math.floor(time));
+                if (window.Auth && Auth.isLoggedIn && Auth.isLoggedIn() && Auth.getAccessToken()) {
+                    xhr.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
+                }
+                xhr.send("auth_token=" + encodeURIComponent(token) + "&claim_id=" + encodeURIComponent(claimId) + "&uri=" + encodeURIComponent(uri) + "&last_timestamp=" + Math.floor(time));
             });
+        },
+        react: function (claimId, type, clearType, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "https://api.odysee.com/reaction/react", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            if (window.Auth && Auth.isLoggedIn && Auth.isLoggedIn() && Auth.getAccessToken()) {
+                xhr.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
+            }
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            if (callback) callback(null, resp);
+                        } catch (e) {
+                            if (callback) callback(e);
+                        }
+                    } else {
+                        if (callback) callback(new Error("React failed: " + xhr.status));
+                    }
+                }
+            };
+            this.ensureAuthToken(function(token) {
+                var body = "claim_ids=" + encodeURIComponent(claimId) +
+                    "&type=" + encodeURIComponent(type);
+                if (clearType) body += "&clear_types=" + encodeURIComponent(clearType);
+                if (token) body += "&auth_token=" + encodeURIComponent(token);
+                xhr.send(body);
+            });
+        },
+        getMyReaction: function (claimId, callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "https://api.odysee.com/reaction/list", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            if (window.Auth && Auth.isLoggedIn && Auth.isLoggedIn() && Auth.getAccessToken()) {
+                xhr.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
+            }
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            var my = (resp.data && resp.data.my_reactions) ? resp.data.my_reactions[claimId] : null;
+                            callback(null, my); // e.g. "like", "dislike", or null
+                        } catch (e) {
+                            callback(e);
+                        }
+                    } else {
+                        callback(new Error("Reaction list failed: " + xhr.status));
+                    }
+                }
+            };
+            this.ensureAuthToken(function(token) {
+                var body = "claim_ids=" + encodeURIComponent(claimId);
+                if (token) body += "&auth_token=" + encodeURIComponent(token);
+                xhr.send(body);
+            });
+        },
+        getSubscribedChannels: function (callback) {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "https://api.odysee.com/subscription/list", true);
+            if (window.Auth && Auth.isLoggedIn && Auth.isLoggedIn() && Auth.getAccessToken()) {
+                xhr.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
+            }
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            var items = resp.data || [];
+                            callback(null, items);
+                        } catch (e) {
+                            callback(e);
+                        }
+                    } else {
+                        callback(new Error("Subscription list failed: " + xhr.status));
+                    }
+                }
+            };
+            this.ensureAuthToken(function(token) {
+                if (token && !xhr.hasSent) {
+                    xhr.hasSent = true;
+                    xhr.send();
+                }
+            });
+        },
+        getFollowingVideos: function (cb, page) {
+            var self = this;
+            this.getSubscribedChannels(function (err, channels) {
+                if (err) return cb(err);
+                if (!channels || !channels.length) {
+                    return cb(null, { items: [], total_pages: 0 });
+                }
+                var cids = [];
+                for (var i = 0; i < channels.length && cids.length < 50; i++) {
+                    if (channels[i].claim_id) cids.push(channels[i].claim_id);
+                }
+                if (!cids.length) return cb(null, { items: [], total_pages: 0 });
+
+                e("claim_search", {
+                    channel_ids: cids,
+                    claim_type: ["stream"],
+                    stream_types: ["video"],
+                    page_size: 20,
+                    page: page || 1,
+                    has_no_source: false,
+                    fee_amount: "<=0",
+                    order_by: ["release_time"] // Newest first!
+                }, filterPlayable(cb));
+            });
+        },
+        getWatchLaterIds: function () {
+            try {
+                var raw = localStorage.getItem("odysee_watch_later");
+                return raw ? JSON.parse(raw) : [];
+            } catch (e) {
+                return [];
+            }
+        },
+        saveWatchLater: function (claimId, add) {
+            try {
+                var list = this.getWatchLaterIds();
+                var idx = list.indexOf(claimId);
+                if (add && idx === -1) {
+                    list.unshift(claimId);
+                } else if (!add && idx > -1) {
+                    list.splice(idx, 1);
+                }
+                localStorage.setItem("odysee_watch_later", JSON.stringify(list));
+            } catch (e) { }
+        },
+        isWatchLater: function (claimId) {
+            var list = this.getWatchLaterIds();
+            return list.indexOf(claimId) > -1;
+        },
+        getWatchLaterVideos: function (cb, page) {
+            var list = this.getWatchLaterIds();
+            if (!list || !list.length) {
+                return cb(null, { items: [], total_pages: 0 });
+            }
+            var p = page || 1;
+            var size = 20;
+            var slice = list.slice((p - 1) * size, p * size);
+            if (!slice.length) {
+                return cb(null, { items: [], total_pages: 0 });
+            }
+            e("claim_search", {
+                claim_ids: slice,
+                page_size: size,
+                has_no_source: false,
+                order_by: ["release_time"] // Newest first!
+            }, filterPlayable(cb));
+        },
+        getResumePoint: function (claimId) {
+            try {
+                var raw = localStorage.getItem("odysee_resume_points");
+                var points = raw ? JSON.parse(raw) : {};
+                return points[claimId] || null;
+            } catch (e) {
+                return null;
+            }
+        },
+        saveResumePoint: function (claimId, time, duration) {
+            try {
+                var raw = localStorage.getItem("odysee_resume_points");
+                var points = raw ? JSON.parse(raw) : {};
+                if (duration && time / duration > 0.9) {
+                    delete points[claimId];
+                } else if (time > 10) {
+                    points[claimId] = { time: Math.floor(time), duration: Math.floor(duration || 0), updatedAt: Date.now() };
+                }
+                localStorage.setItem("odysee_resume_points", JSON.stringify(points));
+            } catch (e) { }
         },
         reportWatchmanPlayback: function(url, duration, position, rel_position, rebuf_count, rebuf_duration) {
             var payload = {

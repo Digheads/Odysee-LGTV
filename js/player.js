@@ -59,6 +59,15 @@ var Player = (function () {
         rebuf_start = 0;
         rebuf_duration = 0;
 
+        var cClaim = window._activeClaim;
+        if (cClaim && cClaim.claim_id && t) {
+            var curClose = t.currentTime || 0,
+                durClose = t.duration || 0;
+            if (window.OdyseeAPI && typeof OdyseeAPI.saveResumePoint === "function") {
+                OdyseeAPI.saveResumePoint(cClaim.claim_id, curClose, durClose);
+            }
+        }
+
         t.pause();
         t.onerror = null;
         t.innerHTML = "";
@@ -93,6 +102,29 @@ var Player = (function () {
             triedMp4 = false,
             stalledAtZero = false,
             playReason = "";
+
+        var resumePoint = (window.OdyseeAPI && typeof OdyseeAPI.getResumePoint === "function") ?
+            OdyseeAPI.getResumePoint(e.claim_id) : null;
+        var initialResumeTime = (resumePoint && resumePoint.time > 10 && (!resumePoint.duration || resumePoint.time < resumePoint.duration - 15)) ?
+            resumePoint.time : 0;
+
+        function showResumeNotice(sec) {
+            var notice = document.getElementById("resume-notice");
+            if (!notice) {
+                notice = document.createElement("div");
+                notice.id = "resume-notice";
+                notice.className = "resume-notice";
+                var cc = document.getElementById("custom-controls");
+                if (cc) cc.appendChild(notice);
+            }
+            if (notice) {
+                notice.textContent = "▶ Resume: " + Utils.formatDuration(sec, 0);
+                notice.style.display = "block";
+                setTimeout(function () {
+                    notice.style.display = "none";
+                }, 3500);
+            }
+        }
 
         function handleMediaError(code, url) {
             clearStall();
@@ -185,6 +217,23 @@ var Player = (function () {
             i.onerror = function () {
                 handleMediaError(i.error ? i.error.code : 0, url);
             };
+
+            if (initialResumeTime > 0) {
+                var targetResume = initialResumeTime;
+                initialResumeTime = 0;
+                var onCanPlayResume = function () {
+                    i.removeEventListener("canplay", onCanPlayResume);
+                    try {
+                        i.currentTime = targetResume;
+                        console.log("Resuming playback from " + targetResume + "s");
+                        showResumeNotice(targetResume);
+                    } catch (err) {
+                        console.error("Resume seek error:", err);
+                    }
+                };
+                i.addEventListener("canplay", onCanPlayResume);
+            }
+
             i.load();
             var p = i.play();
             if (p && "function" == typeof p.catch) {
@@ -202,7 +251,7 @@ var Player = (function () {
             uploadDate = new Date(e.value.release_time * 1000).toLocaleDateString();
         }
 
-        var clockSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>';
+        var clockSvg = (typeof Icons !== 'undefined') ? Icons.get('clock') : '';
         var metaDateEl = document.getElementById("meta-date");
         if (metaDateEl) metaDateEl.innerHTML = uploadDate ? clockSvg + uploadDate : "";
 
@@ -218,7 +267,7 @@ var Player = (function () {
         var progressFillEl = document.getElementById("progress-fill");
         if (progressFillEl) progressFillEl.style.width = "0%";
 
-        var eyeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>';
+        var eyeSvg = (typeof Icons !== 'undefined') ? Icons.get('eye') : '';
         if (e._cached_views !== undefined && metaViewsEl) {
             metaViewsEl.innerHTML = eyeSvg + e._cached_views;
         } else if (e.claim_id) {
@@ -230,15 +279,104 @@ var Player = (function () {
             });
         }
 
-        var likeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 4px;"><path d="M2 20h2c.55 0 1-.45 1-1v-9c0-.55-.45-1-1-1H2v11zm19.83-7.12c.11-.25.17-.52.17-.8V11c0-1.1-.9-2-2-2h-5.98l1.24-5.22.04-.32c0-.41-.17-.79-.44-1.06L14.28 1 8.14 7.55C7.81 7.89 7.6 8.35 7.6 8.85V19c0 1.1.9 2 2 2h7.97c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-.12z"/></svg>';
-        var dislikeSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-left: 12px; margin-right: 4px;"><path d="M22 4h-2c-.55 0-1 .45-1 1v9c0 .55.45 1 1 1h2V4zM2.17 11.12c-.11.25-.17.52-.17.8V13c0 1.1.9 2 2 2h5.98l-1.24 5.22-.04.32c0 .41.17.79.44 1.06L9.72 23l6.14-6.55c.33-.34.54-.8.54-1.3V5c0-1.1-.9-2-2-2H6.43c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v.12z"/></svg>';
-        if (e._cached_reactions && metaReactionsEl) {
-            metaReactionsEl.innerHTML = likeSvg + (e._cached_reactions.like || 0) + dislikeSvg + (e._cached_reactions.dislike || 0);
+        var isAuth = window.Auth && Auth.isLoggedIn && Auth.isLoggedIn();
+        var likeSvg = (typeof Icons !== 'undefined') ? Icons.get('fire') : '';
+        var dislikeSvg = (typeof Icons !== 'undefined') ? Icons.get('slime') : '';
+
+        function bindReactionButtons(claimId) {
+            var btnLike = document.getElementById("btn-like");
+            var btnDislike = document.getElementById("btn-dislike");
+            var countLike = document.getElementById("like-count");
+            var countDislike = document.getElementById("dislike-count");
+
+            if (btnLike) {
+                btnLike.onclick = function (evt) {
+                    evt.stopPropagation();
+                    var wasLiked = btnLike.classList.contains("active-like");
+                    var wasDisliked = btnDislike ? btnDislike.classList.contains("active-dislike") : false;
+                    var curL = parseInt(countLike ? countLike.textContent : "0", 10) || 0;
+                    var curD = parseInt(countDislike ? countDislike.textContent : "0", 10) || 0;
+
+                    if (wasLiked) {
+                        btnLike.classList.remove("active-like");
+                        if (countLike) countLike.textContent = Math.max(0, curL - 1);
+                        OdyseeAPI.react(claimId, "like", "like");
+                    } else {
+                        btnLike.classList.add("active-like");
+                        if (countLike) countLike.textContent = curL + 1;
+                        if (wasDisliked && btnDislike) {
+                            btnDislike.classList.remove("active-dislike");
+                            if (countDislike) countDislike.textContent = Math.max(0, curD - 1);
+                        }
+                        OdyseeAPI.react(claimId, "like", "dislike");
+                    }
+                };
+            }
+
+            if (btnDislike) {
+                btnDislike.onclick = function (evt) {
+                    evt.stopPropagation();
+                    var wasDisliked = btnDislike.classList.contains("active-dislike");
+                    var wasLiked = btnLike ? btnLike.classList.contains("active-like") : false;
+                    var curL = parseInt(countLike ? countLike.textContent : "0", 10) || 0;
+                    var curD = parseInt(countDislike ? countDislike.textContent : "0", 10) || 0;
+
+                    if (wasDisliked) {
+                        btnDislike.classList.remove("active-dislike");
+                        if (countDislike) countDislike.textContent = Math.max(0, curD - 1);
+                        OdyseeAPI.react(claimId, "dislike", "dislike");
+                    } else {
+                        btnDislike.classList.add("active-dislike");
+                        if (countDislike) countDislike.textContent = curD + 1;
+                        if (wasLiked && btnLike) {
+                            btnLike.classList.remove("active-like");
+                            if (countLike) countLike.textContent = Math.max(0, curL - 1);
+                        }
+                        OdyseeAPI.react(claimId, "dislike", "like");
+                    }
+                };
+            }
+        }
+
+        function renderReactions(likes, dislikes) {
+            if (!metaReactionsEl) return;
+            if (isAuth) {
+                metaReactionsEl.innerHTML =
+                    '<button class="focusable btn-player-reaction" id="btn-like" title="Like">' +
+                    likeSvg + '<span id="like-count">' + (likes || 0) + '</span>' +
+                    '</button>' +
+                    '<button class="focusable btn-player-reaction" id="btn-dislike" title="Dislike">' +
+                    dislikeSvg + '<span id="dislike-count">' + (dislikes || 0) + '</span>' +
+                    '</button>';
+                bindReactionButtons(e.claim_id);
+
+                if (window.OdyseeAPI && typeof OdyseeAPI.getMyReaction === "function") {
+                    OdyseeAPI.getMyReaction(e.claim_id, function (err, myRx) {
+                        var bLike = document.getElementById("btn-like");
+                        var bDislike = document.getElementById("btn-dislike");
+                        if (!bLike || !bDislike) return;
+                        if (myRx === "like") {
+                            bLike.classList.add("active-like");
+                        } else if (myRx === "dislike") {
+                            bDislike.classList.add("active-dislike");
+                        }
+                    });
+                }
+                setTimeout(function () {
+                    SpatialNavigation.refresh();
+                }, 100);
+            } else {
+                metaReactionsEl.innerHTML = likeSvg + (likes || 0) + dislikeSvg + (dislikes || 0);
+            }
+        }
+
+        if (e._cached_reactions) {
+            renderReactions(e._cached_reactions.like, e._cached_reactions.dislike);
         } else if (e.claim_id) {
             OdyseeAPI.getReactions(e.claim_id, function (err, reactions) {
-                if (!err && reactions && metaReactionsEl) {
+                if (!err && reactions) {
                     e._cached_reactions = reactions;
-                    metaReactionsEl.innerHTML = likeSvg + (reactions.like || 0) + dislikeSvg + (reactions.dislike || 0);
+                    renderReactions(reactions.like, reactions.dislike);
                 }
             });
         }
@@ -761,6 +899,12 @@ var Player = (function () {
             if (window.OdyseeAPI && typeof OdyseeAPI.reportWatchmanPlayback === "function") {
                 OdyseeAPI.reportWatchmanPlayback(n.currentSrc || "", dur, cur, rel, rebuf_count, rebuf_duration);
             }
+
+            var cClaim = window._activeClaim;
+            if (cClaim && cClaim.claim_id && window.OdyseeAPI && typeof OdyseeAPI.saveResumePoint === "function") {
+                OdyseeAPI.saveResumePoint(cClaim.claim_id, 0, dur);
+            }
+
             closePlayer();
         });
 
@@ -780,9 +924,14 @@ var Player = (function () {
                 if (now - last_progress_report >= 10000) {
                     last_progress_report = now;
                     var cClaim = window._activeClaim;
-                    if (cClaim && cClaim.claim_id && window.OdyseeAPI && typeof OdyseeAPI.saveViewProgress === "function") {
-                        var uri = cClaim.canonical_url || cClaim.permanent_url || cClaim.short_url || "";
-                        OdyseeAPI.saveViewProgress(cClaim.claim_id, uri, cur);
+                    if (cClaim && cClaim.claim_id) {
+                        if (window.OdyseeAPI && typeof OdyseeAPI.saveViewProgress === "function") {
+                            var uri = cClaim.canonical_url || cClaim.permanent_url || cClaim.short_url || "";
+                            OdyseeAPI.saveViewProgress(cClaim.claim_id, uri, cur);
+                        }
+                        if (window.OdyseeAPI && typeof OdyseeAPI.saveResumePoint === "function") {
+                            OdyseeAPI.saveResumePoint(cClaim.claim_id, cur, dur);
+                        }
                     }
                 }
             } catch (err) { }

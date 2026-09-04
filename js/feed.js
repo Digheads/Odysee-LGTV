@@ -39,9 +39,163 @@ var Feed = (function () {
 
     function dispatchLoad(id, page, cb) {
         if ("nav-trending" === id) return OdyseeAPI.getTrending(cb, page);
+        if ("nav-following" === id) return OdyseeAPI.getFollowingVideos(cb, page);
+        if ("nav-watch-later" === id) return OdyseeAPI.getWatchLaterVideos(cb, page);
         if ("nav-search" === id) return OdyseeAPI.search(currentSearchQuery, cb, page);
         if (0 === id.indexOf("cat:")) return OdyseeAPI.getCategory(id.substring(4), cb, page);
         cb(new Error("Unknown view: " + id));
+    }
+
+    function renderLoginView(t) {
+        t.innerHTML = '<div class="login-card">' +
+            '<h2 class="login-title">Log in to your Odysee account</h2>' +
+            '<p class="login-step">1. Go to the following address on your phone or computer:</p>' +
+            '<div class="login-url">odysee.com/$/activate</div>' +
+            '<p class="login-step">2. Enter this activation code:</p>' +
+            '<div class="login-code-box" id="login-code-box">Request code...</div>' +
+            '<div class="login-status" id="login-status-box">' +
+            '<span class="login-spinner"></span> Waiting for confirmation on your phone...' +
+            '</div>' +
+            '<button class="focusable btn-login-action" id="btn-login-refresh" style="display:none;">Request a new code</button>' +
+            '</div>';
+
+        SpatialNavigation.refresh();
+
+        if (window.Auth && typeof Auth.startDeviceFlow === "function") {
+            Auth.startDeviceFlow(
+                function (info) {
+                    var codeBox = document.getElementById("login-code-box");
+                    if (codeBox) codeBox.textContent = info.userCode;
+                    var refreshBtn = document.getElementById("btn-login-refresh");
+                    if (refreshBtn) refreshBtn.style.display = "none";
+                },
+                function (user) {
+                    var statusBox = document.getElementById("login-status-box");
+                    if (statusBox) statusBox.innerHTML = '<span style="color:#4ade80;">✓ Successful login!</span>';
+                    setTimeout(function () {
+                        loadPage("nav-profile");
+                    }, 1200);
+                },
+                function (err) {
+                    var statusBox = document.getElementById("login-status-box");
+                    if (statusBox) statusBox.innerHTML = '<span style="color:#f87171;">' + (err.message || "An activation error occurred.") + '</span>';
+                    var refreshBtn = document.getElementById("btn-login-refresh");
+                    if (refreshBtn) {
+                        refreshBtn.style.display = "inline-block";
+                        SpatialNavigation.refresh();
+                        refreshBtn.onclick = function () {
+                            renderLoginView(t);
+                        };
+                    }
+                }
+            );
+        }
+    }
+
+    function renderProfileView(t) {
+        var user = (window.Auth && Auth.getUser) ? Auth.getUser() : {};
+        var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : { hideMature: true, hideMembersOnly: false, hideYoutube: false };
+
+        var avatarSrc = "icons/icon.png";
+        if (user.avatarUrl) {
+            avatarSrc = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(user.avatarUrl, 160) : user.avatarUrl;
+        }
+
+        var displayName = user.channelName || (user.email ? user.email.split("@")[0] : "Odysee User");
+        if (0 !== displayName.indexOf("@") && user.channelName) displayName = "@" + displayName;
+        var emailDisplay = user.email || "";
+        var followersText = (user.followers || 0) + " followers";
+
+        var html = '<div class="profile-view">' +
+            '<div class="profile-header-card">' +
+            '<div class="profile-avatar-wrap">' +
+            '<img src="' + avatarSrc + '" class="profile-avatar-img" alt="Avatar">' +
+            '</div>' +
+            '<div class="profile-meta-wrap">' +
+            '<div class="profile-display-name">' + (window.Utils && Utils.escapeHtml ? Utils.escapeHtml(displayName) : displayName) + '</div>' +
+            (emailDisplay ? '<div class="profile-email">' + (window.Utils && Utils.escapeHtml ? Utils.escapeHtml(emailDisplay) : emailDisplay) + '</div>' : '') +
+            '<div class="profile-followers-badge">' + followersText + '</div>' +
+            '</div>' +
+            '<div class="profile-header-actions">' +
+            '<button class="focusable btn-profile-logout" id="btn-logout">Log Out</button>' +
+            '</div>' +
+            '</div>' +
+
+            '<div class="profile-settings-card">' +
+            '<h3 class="profile-settings-title">Settings</h3>' +
+
+            '<div class="setting-row">' +
+            '<div class="setting-info">' +
+            '<div class="setting-name">Hide mature content</div>' +
+            '<div class="setting-desc">Hide adult (18+) content from results</div>' +
+            '</div>' +
+            '<button class="focusable btn-setting-toggle ' + (settings.hideMature ? 'toggle-active' : '') + '" id="toggle-mature">' +
+            (settings.hideMature ? 'ON' : 'OFF') +
+            '</button>' +
+            '</div>' +
+
+            '<div class="setting-row">' +
+            '<div class="setting-info">' +
+            '<div class="setting-name">Hide members-only content</div>' +
+            '<div class="setting-desc">Hide channel members-only content</div>' +
+            '</div>' +
+            '<button class="focusable btn-setting-toggle ' + (settings.hideMembersOnly ? 'toggle-active' : '') + '" id="toggle-members">' +
+            (settings.hideMembersOnly ? 'ON' : 'OFF') +
+            '</button>' +
+            '</div>' +
+
+            '<div class="setting-row">' +
+            '<div class="setting-info">' +
+            '<div class="setting-name">Hide synced YouTube videos</div>' +
+            '<div class="setting-desc">Hide videos synced from YouTube</div>' +
+            '</div>' +
+            '<button class="focusable btn-setting-toggle ' + (settings.hideYoutube ? 'toggle-active' : '') + '" id="toggle-youtube">' +
+            (settings.hideYoutube ? 'ON' : 'OFF') +
+            '</button>' +
+            '</div>' +
+            '</div>' +
+            '</div>';
+
+        t.innerHTML = html;
+        SpatialNavigation.refresh();
+
+        var logoutBtn = document.getElementById("btn-logout");
+        if (logoutBtn) {
+            logoutBtn.addEventListener("click", function () {
+                if (window.Auth && Auth.logout) {
+                    Auth.logout(function () {
+                        loadPage("nav-trending");
+                    });
+                }
+            });
+        }
+
+        function setupToggle(btnId, settingKey) {
+            var btn = document.getElementById(btnId);
+            if (!btn) return;
+            btn.addEventListener("click", function () {
+                var currentVal = !!settings[settingKey];
+                var nextVal = !currentVal;
+                settings[settingKey] = nextVal;
+                if (window.Auth && Auth.updateSetting) {
+                    Auth.updateSetting(settingKey, nextVal);
+                }
+                btn.textContent = nextVal ? "ON" : "OFF";
+                if (nextVal) {
+                    btn.classList.add("toggle-active");
+                } else {
+                    btn.classList.remove("toggle-active");
+                }
+            });
+        }
+
+        setupToggle("toggle-mature", "hideMature");
+        setupToggle("toggle-members", "hideMembersOnly");
+        setupToggle("toggle-youtube", "hideYoutube");
+
+        setTimeout(function () {
+            if (logoutBtn) logoutBtn.focus();
+        }, 100);
     }
 
     function loadPage(e) {
@@ -71,10 +225,19 @@ var Feed = (function () {
 
         if ("nav-login" === e) {
             isLoading = false;
+            hasMore = false;
             o.style.display = "none";
             n.style.display = "none";
-            t.innerHTML = '<div style="color:white;text-align:center;width:100%;font-size:32px;margin-top:100px;font-weight:600;">Log In to Odysee (Coming Soon)</div>';
-            SpatialNavigation.refresh();
+            renderLoginView(t);
+            return;
+        }
+
+        if ("nav-profile" === e) {
+            isLoading = false;
+            hasMore = false;
+            o.style.display = "none";
+            n.style.display = "none";
+            renderProfileView(t);
             return;
         }
 
@@ -83,7 +246,7 @@ var Feed = (function () {
             n.style.display = "none";
             if (err) {
                 var msg = err.message || ("string" == typeof err ? err : JSON.stringify(err));
-                t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. Error: ' + msg + "</div>";
+                t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. ' + msg + "</div>";
                 console.error(err);
                 SpatialNavigation.refresh();
                 return;
@@ -136,7 +299,7 @@ var Feed = (function () {
             n.style.display = "none";
             if (err) {
                 var msg = err.message || ("string" == typeof err ? err : JSON.stringify(err));
-                t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Search failed. Error: ' + msg + "</div>";
+                t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Search failed. ' + msg + "</div>";
                 console.error(err);
                 SpatialNavigation.refresh();
                 return;

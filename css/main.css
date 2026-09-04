@@ -424,6 +424,8 @@ body {
     width: 0%;
     height: 100%;
     background: #E2225E;
+    background: -webkit-linear-gradient(147deg, #E2225E, #f77937);
+    background: linear-gradient(147deg, #E2225E, #f77937);
     transition: width 0.1s linear;
 }
 
@@ -576,4 +578,319 @@ body {
 .cp-stats {
     font-size: 20px;
     color: #a0a0a0;
+}
+
+/* Sidebar avatar */
+.logo-img.user-avatar {
+    border-radius: 50%;
+    border: 2px solid #E2225E;
+    object-fit: cover;
+}
+
+/* Device Flow Login Card */
+.login-card {
+    background: #18191E;
+    border-radius: 20px;
+    padding: 50px 60px;
+    margin: 60px auto;
+    max-width: 800px;
+    text-align: center;
+    border: 1px solid #2B2D35;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.login-title {
+    font-size: 38px;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 24px;
+}
+
+.login-step {
+    font-size: 24px;
+    color: #9CA3AF;
+    margin-bottom: 12px;
+}
+
+.login-url {
+    font-size: 36px;
+    font-weight: bold;
+    color: #E2225E;
+    background: rgba(226, 34, 94, 0.1);
+    display: inline-block;
+    padding: 12px 30px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    border: 1px dashed #E2225E;
+}
+
+.login-code-box {
+    font-size: 54px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    color: #FFFFFF;
+    background: #252830;
+    display: inline-block;
+    padding: 18px 45px;
+    border-radius: 16px;
+    margin-bottom: 30px;
+    border: 2px solid #374151;
+}
+
+.login-status {
+    font-size: 22px;
+    color: #D1D5DB;
+    margin-top: 10px;
+}
+
+.login-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #E2225E;
+    -webkit-animation: spin 1s ease-in-out infinite;
+    animation: spin 1s ease-in-out infinite;
+    vertical-align: middle;
+    margin-right: 10px;
+}
+
+.btn-login-action {
+    background: #E2225E;
+    color: #FFFFFF;
+    border: none;
+    padding: 15px 35px;
+    font-size: 22px;
+    font-weight: 600;
+    border-radius: 12px;
+    margin-top: 25px;
+    cursor: pointer;
+}
+
+.btn-login-action.focused {
+    background: #FF4B72;
+    box-shadow: 0 0 20px #E2225E;
+    transform: scale(1.05);
+}
+
+/* Profile View */
+.profile-view {
+    padding: 30px 40px;
+    max-width: 1100px;
+}
+
+.profile-header-card {
+    background: #18191E;
+    border-radius: 20px;
+    padding: 35px 40px;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    margin-bottom: 40px;
+    border: 1px solid #2B2D35;
+}
+
+.profile-avatar-wrap {
+    margin-right: 35px;
+    -webkit-flex-shrink: 0;
+    flex-shrink: 0;
+}
+
+.profile-avatar-img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #E2225E;
+    background-color: #252830;
+}
+
+.profile-meta-wrap {
+    -webkit-flex-grow: 1;
+    flex-grow: 1;
+}
+
+.profile-display-name {
+    font-size: 36px;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 6px;
+}
+
+.profile-email {
+    font-size: 20px;
+    color: #9CA3AF;
+    margin-bottom: 10px;
+}
+
+.profile-followers-badge {
+    display: inline-block;
+    font-size: 18px;
+    font-weight: 600;
+    color: #E2225E;
+    background: rgba(226, 34, 94, 0.15);
+    padding: 6px 16px;
+    border-radius: 20px;
+}
+
+.profile-header-actions {
+    -webkit-flex-shrink: 0;
+    flex-shrink: 0;
+}
+
+.btn-profile-logout {
+    background: #252830;
+    color: #EF4444;
+    border: 2px solid #EF4444;
+    padding: 14px 28px;
+    font-size: 20px;
+    font-weight: 700;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-profile-logout.focused {
+    background: #EF4444;
+    color: #FFFFFF;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+    transform: scale(1.05);
+}
+
+/* Profile Settings */
+.profile-settings-card {
+    background: #18191E;
+    border-radius: 20px;
+    padding: 35px 40px;
+    border: 1px solid #2B2D35;
+}
+
+.profile-settings-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #2B2D35;
+}
+
+.setting-row {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-justify-content: space-between;
+    justify-content: space-between;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 1px solid #23252C;
+}
+
+.setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-info {
+    -webkit-flex-grow: 1;
+    flex-grow: 1;
+    padding-right: 30px;
+}
+
+.setting-name {
+    font-size: 22px;
+    font-weight: 600;
+    color: #FFFFFF;
+    margin-bottom: 6px;
+}
+
+.setting-desc {
+    font-size: 16px;
+    color: #9CA3AF;
+}
+
+.btn-setting-toggle {
+    background: #252830;
+    color: #9CA3AF;
+    border: 2px solid #374151;
+    min-width: 90px;
+    padding: 10px 20px;
+    font-size: 18px;
+    font-weight: 700;
+    border-radius: 25px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-setting-toggle.toggle-active {
+    background: rgba(226, 34, 94, 0.2);
+    border-color: #E2225E;
+    color: #E2225E;
+}
+
+.btn-setting-toggle.focused {
+    border-color: #FFFFFF;
+    color: #FFFFFF;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    transform: scale(1.1);
+}
+
+.btn-setting-toggle.toggle-active.focused {
+    background: #E2225E;
+    border-color: #FFFFFF;
+    color: #FFFFFF;
+    box-shadow: 0 0 20px #E2225E;
+}
+
+/* Player Like & Dislike Buttons */
+.btn-player-reaction {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-right: 12px;
+    display: inline-block;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+}
+
+.btn-player-reaction.focused {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #FFFFFF;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    transform: scale(1.08);
+}
+
+.btn-player-reaction.active-like {
+    color: #FF5A2B;
+    border-color: #FF5A2B;
+    background: rgba(255, 90, 43, 0.15);
+}
+
+.btn-player-reaction.active-dislike {
+    color: #10B981;
+    border-color: #10B981;
+    background: rgba(16, 185, 129, 0.15);
+}
+
+/* Resume Notice Toast */
+.resume-notice {
+    position: absolute;
+    top: -55px;
+    left: 40px;
+    background: rgba(17, 24, 39, 0.9);
+    border: 1px solid #E2225E;
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 10px 22px;
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+    display: none;
+    z-index: 100;
 }
