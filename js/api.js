@@ -433,6 +433,35 @@ var OdyseeAPI = function () {
                 xhr.send("auth_token=" + token + "&claim_id=" + claimId);
             });
         },
+        saveViewProgress: function (claimId, uri, time) {
+            this.ensureAuthToken(function(token) {
+                if (!token) return; // Only log for logged in users
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "https://api.odysee.com/file/view", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.send("auth_token=" + token + "&claim_id=" + encodeURIComponent(claimId) + "&uri=" + encodeURIComponent(uri) + "&last_timestamp=" + Math.floor(time));
+            });
+        },
+        reportWatchmanPlayback: function(url, duration, position, rel_position, rebuf_count, rebuf_duration) {
+            var payload = {
+                url: url,
+                device: "stb",
+                duration: Math.floor(duration || 0),
+                protocol: url.indexOf(".m3u8") > -1 ? "hls" : "mp4",
+                player: "lgtv",
+                user_id: "",
+                position: Math.floor(position || 0),
+                rel_position: Math.floor(rel_position || 0),
+                rebuf_count: rebuf_count || 0,
+                rebuf_duration: rebuf_duration || 0
+            };
+            this.ensureAuthToken(function(token) {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "https://watchman.na-backend.odysee.com/reports/playback", true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.send(JSON.stringify(payload));
+            });
+        },
         searchChannelVideos: function (channelClaimId, cb, page) {
             if (!page) page = 1;
             var params = {

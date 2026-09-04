@@ -487,6 +487,19 @@ function closePlayer() {
     clearStall();
     var e = document.getElementById("player-container"),
         t = document.getElementById("video-player");
+    
+    // Send watchman report on close if we have played something
+    if (!t.paused || t.currentTime > 0) {
+        var dur = t.duration || parseFloat(t.getAttribute("data-duration")) || 0;
+        var rel = dur > 0 ? (t.currentTime / dur * 100) : 0;
+        OdyseeAPI.reportWatchmanPlayback(t.currentSrc || "", dur, t.currentTime, rel, typeof rebuf_count !== 'undefined' ? rebuf_count : 0, typeof rebuf_duration !== 'undefined' ? rebuf_duration : 0);
+    }
+    if (typeof rebuf_count !== 'undefined') {
+        rebuf_count = 0;
+        rebuf_start = 0;
+        rebuf_duration = 0;
+    }
+    
     t.pause(), t.onerror = null, t.innerHTML = "", t.src = "", e.classList.add("hidden"), SpatialNavigation.refresh();
     var targetCard = window.isChannelPageOpen ? window.lastFocusedChannelCard : window.lastFocusedCard;
     if (targetCard) {
@@ -1363,6 +1376,7 @@ function playVideo(e) {
                                 var urlWithTime = newUrl + "#t=" + savedTime.toFixed(3);
                                 n.pause();
                                 n.removeAttribute("src");
+                                n.innerHTML = "";
                                 n.load();
                                 n.style.opacity = "0"; // Hide to prevent frame 0 flash
                                 setTimeout(function() {
@@ -1416,8 +1430,11 @@ function playVideo(e) {
             return (n < 10 ? "0" + n : n) + ":" + (i < 10 ? "0" + i : i)
         }
     }
+    var rebuf_count = 0, rebuf_start = 0, rebuf_duration = 0, last_progress_report = 0;
     n.addEventListener("waiting", (function () {
-        c.style.display = "block"
+        c.style.display = "block";
+        rebuf_start = Date.now();
+        rebuf_count++;
     })), n.addEventListener("seeking", (function () {
         c.style.display = "block";
         stopWatchdog();
@@ -1426,6 +1443,10 @@ function playVideo(e) {
     })), n.addEventListener("playing", (function () {
         c.style.display = "none";
         startWatchdogDelayed(); // stop any existing, wait 30s, then arm
+        if (rebuf_start > 0) {
+            rebuf_duration += Date.now() - rebuf_start;
+            rebuf_start = 0;
+        }
     })), n.addEventListener("canplay", (function () {
         c.style.display = "none";
         var errEl = document.getElementById("player-error");
@@ -1462,7 +1483,8 @@ function playVideo(e) {
             }
             return;
         }
-
+        var rel = t > 0 ? (e / t * 100) : 0;
+        OdyseeAPI.reportWatchmanPlayback(n.currentSrc || "", t, e, rel, rebuf_count, rebuf_duration);
         closePlayer()
     })), n.addEventListener("timeupdate", (function () {
         try {
@@ -1473,6 +1495,15 @@ function playVideo(e) {
             t && !isNaN(t) && t !== 1 / 0 || (t = i);
             var o = 0;
             t && !isNaN(t) && t > 0 && (o = e / t * 100), a.style.width = o + "%", r.textContent = u(e, t) + " / " + u(t, t)
+            
+            var now = Date.now();
+            if (now - last_progress_report >= 10000) {
+                last_progress_report = now;
+                if (currentClaim && currentClaim.claim_id) {
+                    var uri = currentClaim.canonical_url || currentClaim.permanent_url || currentClaim.short_url || "";
+                    OdyseeAPI.saveViewProgress(currentClaim.claim_id, uri, e);
+                }
+            }
         } catch(err) {}
     }))
 
