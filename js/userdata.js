@@ -178,36 +178,78 @@ var UserData = (function () {
 
     // -----------------------------------------------------------------------
     // -----------------------------------------------------------------------
-    // Watch Later & Playlists (Odysee Cloud Preferences + Local Storage Cache)
+    // Watch Later & Playlists (Odysee Cloud Preferences - No localStorage Fallback)
     // -----------------------------------------------------------------------
 
     var cachedRemoteWatchLaterIds = null;
     var cachedSharedPreferences = null;
 
+    function parseSharedPreference(res) {
+        if (!res) return null;
+        var val = null;
+        if (res.shared && res.shared.value !== undefined) {
+            val = res.shared.value;
+        } else if (res.shared !== undefined) {
+            val = res.shared;
+        } else if (res.value !== undefined) {
+            val = res.value;
+        } else {
+            val = res;
+        }
+
+        if (typeof val === "string") {
+            try { val = JSON.parse(val); } catch (e) { }
+        }
+        if (typeof val === "string") {
+            try { val = JSON.parse(val); } catch (e) { }
+        }
+        if (val && typeof val === "object" && val.value && typeof val.value === "object") {
+            val = val.value;
+        }
+        return (val && typeof val === "object") ? val : null;
+    }
+
+    function extractClaimIdFromItem(item) {
+        if (!item) return null;
+        if (typeof item === "object") {
+            if (item.claim_id) return item.claim_id;
+            if (item.claimId) return item.claimId;
+            if (item.channel_id) return item.channel_id;
+            if (item.uri) item = item.uri;
+            else return null;
+        }
+        if (typeof item === "string") {
+            item = item.trim();
+            if (/^[0-9a-f]{40}$/i.test(item)) {
+                return item.toLowerCase();
+            }
+            var matches = item.match(/[0-9a-f]{40}/gi);
+            if (matches && matches.length > 0) {
+                return matches[matches.length - 1].toLowerCase();
+            }
+            var clean = item.replace(/#/g, ":");
+            var parts = clean.split(":");
+            var last = parts[parts.length - 1];
+            if (last && last.length >= 10 && /^[0-9a-f]+$/i.test(last)) {
+                return last.toLowerCase();
+            }
+        }
+        return null;
+    }
+
     function getWatchLaterIds() {
-        if (cachedRemoteWatchLaterIds && cachedRemoteWatchLaterIds.length > 0) {
-            return cachedRemoteWatchLaterIds;
-        }
-        try {
-            var raw = localStorage.getItem("odysee_watch_later");
-            return raw ? JSON.parse(raw) : [];
-        } catch (e) {
-            return [];
-        }
+        return cachedRemoteWatchLaterIds || [];
     }
 
     function saveWatchLater(claimId, add) {
-        try {
-            var list = getWatchLaterIds().slice(0);
-            var idx = list.indexOf(claimId);
-            if (add && idx === -1) {
-                list.unshift(claimId);
-            } else if (!add && idx > -1) {
-                list.splice(idx, 1);
-            }
-            cachedRemoteWatchLaterIds = list;
-            localStorage.setItem("odysee_watch_later", JSON.stringify(list));
-        } catch (e) { }
+        var list = (cachedRemoteWatchLaterIds || []).slice(0);
+        var idx = list.indexOf(claimId);
+        if (add && idx === -1) {
+            list.unshift(claimId);
+        } else if (!add && idx > -1) {
+            list.splice(idx, 1);
+        }
+        cachedRemoteWatchLaterIds = list;
 
         // Sync to Odysee cloud preferences if logged in
         if (window.Auth && Auth.isLoggedIn()) {
@@ -216,9 +258,21 @@ var UserData = (function () {
 
                 function syncToCloud(shared) {
                     if (!shared) return;
-                    if (!shared.builtinCollections) shared.builtinCollections = {};
-                    if (!shared.builtinCollections.watchlater) {
-                        shared.builtinCollections.watchlater = {
+                    if (!shared.builtInCollections && !shared.builtinCollections) {
+                        shared.builtInCollections = {};
+                    }
+                    var targetBuiltIn = shared.builtInCollections || shared.builtinCollections;
+                    var targetKey = "watchlater";
+                    for (var bk in targetBuiltIn) {
+                        if (!targetBuiltIn.hasOwnProperty(bk)) continue;
+                        var c = targetBuiltIn[bk];
+                        if (c && (String(c.id || bk).toLowerCase() === "watchlater" || (c.name && c.name.toLowerCase() === "watch later"))) {
+                            targetKey = bk;
+                            break;
+                        }
+                    }
+                    if (!targetBuiltIn[targetKey]) {
+                        targetBuiltIn[targetKey] = {
                             id: "watchlater",
                             name: "Watch Later",
                             itemCount: 0,
@@ -227,7 +281,7 @@ var UserData = (function () {
                             updatedAt: Math.floor(Date.now() / 1000)
                         };
                     }
-                    var wl = shared.builtinCollections.watchlater;
+                    var wl = targetBuiltIn[targetKey];
                     var items = (wl.items || []).slice(0);
                     var existingIdx = -1;
                     for (var i = 0; i < items.length; i++) {
@@ -256,8 +310,9 @@ var UserData = (function () {
                     syncToCloud(cachedSharedPreferences);
                 } else {
                     LbryRpc.call("preference_get", { key: "shared" }, function (err, res) {
-                        if (!err && res && res.shared && res.shared.value) {
-                            syncToCloud(res.shared.value);
+                        var shared = parseSharedPreference(res);
+                        if (shared) {
+                            syncToCloud(shared);
                         }
                     });
                 }
@@ -287,14 +342,9 @@ var UserData = (function () {
 
         var result = [];
         for (var i = 0; i < raw.length; i++) {
-            var item = raw[i];
-            if (typeof item === "string") {
-                var m = /[0-9a-f]{40}/i.exec(item);
-                if (m) result.push(m[0]);
-                else if (item.length > 0) result.push(item);
-            } else if (item && typeof item === "object") {
-                if (item.claim_id) result.push(item.claim_id);
-                else if (item.claimId) result.push(item.claimId);
+            var cid = extractClaimIdFromItem(raw[i]);
+            if (cid && result.indexOf(cid) === -1) {
+                result.push(cid);
             }
         }
         return result;
@@ -302,44 +352,33 @@ var UserData = (function () {
 
     function fetchRemoteWatchLater(callback) {
         if (!window.Auth || !Auth.isLoggedIn()) {
-            return callback(null, getWatchLaterIds());
+            cachedRemoteWatchLaterIds = [];
+            return callback(null, []);
         }
 
         LbryNet.ensureAuthToken(function (token) {
-            if (!token) {
-                return callback(null, getWatchLaterIds());
-            }
-
             LbryRpc.call("preference_get", { key: "shared" }, function (err, res) {
-                if (!err && res && res.shared && res.shared.value) {
-                    cachedSharedPreferences = res.shared.value;
-                    var wl = cachedSharedPreferences.builtinCollections && cachedSharedPreferences.builtinCollections.watchlater;
-                    if (wl && Array.isArray(wl.items)) {
-                        var ids = [];
-                        for (var i = 0; i < wl.items.length; i++) {
-                            var item = wl.items[i];
-                            if (typeof item === "string") {
-                                var m = /[0-9a-f]{40}/i.exec(item);
-                                if (m) ids.push(m[0]);
-                                else if (item.length > 0) ids.push(item);
-                            }
+                var shared = parseSharedPreference(res);
+                if (shared) {
+                    cachedSharedPreferences = shared;
+                    var builtIn = shared.builtInCollections || shared.builtinCollections || {};
+                    for (var k in builtIn) {
+                        if (!builtIn.hasOwnProperty(k)) continue;
+                        var col = builtIn[k];
+                        if (!col) continue;
+                        var colId = String(col.id || k).toLowerCase();
+                        var colName = (col.name || col.title || "").toLowerCase();
+                        if (colId === "watchlater" || colId === "watch_later" || colName === "watch later" || colName.indexOf("watch later") !== -1) {
+                            var ids = extractClaimIdsFromCollection(col);
+                            cachedRemoteWatchLaterIds = ids;
+                            console.log("UserData: Found " + ids.length + " items in Odysee cloud Watch Later.");
+                            return callback(null, ids);
                         }
-                        console.log("UserData: Found " + ids.length + " items in Odysee cloud Watch Later.");
-                        var local = getWatchLaterIds();
-                        for (var l = 0; l < local.length; l++) {
-                            if (ids.indexOf(local[l]) === -1) {
-                                ids.push(local[l]);
-                            }
-                        }
-                        cachedRemoteWatchLaterIds = ids;
-                        try {
-                            localStorage.setItem("odysee_watch_later", JSON.stringify(ids));
-                        } catch (e) { }
-                        return callback(null, ids);
                     }
                 }
-                console.warn("UserData: preference_get did not return watch later, using local fallback.", err);
-                callback(null, getWatchLaterIds());
+                cachedRemoteWatchLaterIds = [];
+                console.warn("UserData: preference_get did not find watch later collection.", err || "none");
+                callback(null, []);
             });
         });
     }
@@ -382,7 +421,7 @@ var UserData = (function () {
 
         if (p === 1 || !cachedRemoteWatchLaterIds) {
             fetchRemoteWatchLater(function (err, ids) {
-                loadSlice(ids);
+                loadSlice(ids || []);
             });
         } else {
             loadSlice(cachedRemoteWatchLaterIds);
@@ -399,90 +438,92 @@ var UserData = (function () {
         }
 
         LbryNet.ensureAuthToken(function (token) {
-            if (!token) {
-                return callback(null, []);
-            }
-
             LbryRpc.call("preference_get", { key: "shared" }, function (err, res) {
                 var playlists = [];
-                var shared = (!err && res && res.shared && res.shared.value) ? res.shared.value : cachedSharedPreferences;
+                var shared = parseSharedPreference(res) || cachedSharedPreferences;
                 if (shared) {
                     cachedSharedPreferences = shared;
+                    var builtIn = shared.builtInCollections || shared.builtinCollections || {};
+                    var foundWatchLater = false;
+                    var foundFavorites = false;
 
-                    // 1. Built-in: Watch Later
-                    if (shared.builtinCollections && shared.builtinCollections.watchlater) {
-                        var wl = shared.builtinCollections.watchlater;
-                        var wlIds = [];
-                        if (Array.isArray(wl.items)) {
-                            for (var wi = 0; wi < wl.items.length; wi++) {
-                                var wm = /[0-9a-f]{40}/i.exec(wl.items[wi]);
-                                if (wm) wlIds.push(wm[0]);
-                            }
+                    for (var bk in builtIn) {
+                        if (!builtIn.hasOwnProperty(bk)) continue;
+                        var bCol = builtIn[bk];
+                        if (!bCol) continue;
+                        var bId = String(bCol.id || bk).toLowerCase();
+                        var bName = (bCol.name || bCol.title || "").toLowerCase();
+                        var bIds = extractClaimIdsFromCollection(bCol);
+
+                        if (bId === "watchlater" || bId === "watch_later" || bName === "watch later" || bName.indexOf("watch later") !== -1) {
+                            foundWatchLater = true;
+                            cachedRemoteWatchLaterIds = bIds;
+                            playlists.push({
+                                id: "watchlater",
+                                name: "Watch Later",
+                                type: "builtin",
+                                badge: "Default Playlist",
+                                itemCount: bIds.length,
+                                items: bIds,
+                                coverClaimId: bIds[0] || null,
+                                updatedAt: bCol.updatedAt || 0
+                            });
+                        } else if (bId === "favorites" || bId === "favorite" || bName === "favorites" || bName.indexOf("favorite") !== -1) {
+                            foundFavorites = true;
+                            playlists.push({
+                                id: "favorites",
+                                name: "Favorites",
+                                type: "builtin",
+                                badge: "Default Playlist",
+                                itemCount: bIds.length,
+                                items: bIds,
+                                coverClaimId: bIds[0] || null,
+                                updatedAt: bCol.updatedAt || 0
+                            });
+                        } else {
+                            playlists.push({
+                                id: bCol.id || bk,
+                                name: bCol.name || bCol.title || "Built-in Playlist",
+                                type: "builtin",
+                                badge: "Default Playlist",
+                                itemCount: bIds.length,
+                                items: bIds,
+                                coverClaimId: bIds[0] || null,
+                                updatedAt: bCol.updatedAt || 0
+                            });
                         }
-                        var localWl = getWatchLaterIds();
-                        for (var l = 0; l < localWl.length; l++) {
-                            if (wlIds.indexOf(localWl[l]) === -1) {
-                                wlIds.push(localWl[l]);
-                            }
-                        }
-                        playlists.push({
+                    }
+
+                    if (!foundWatchLater && cachedRemoteWatchLaterIds && cachedRemoteWatchLaterIds.length > 0) {
+                        playlists.unshift({
                             id: "watchlater",
                             name: "Watch Later",
                             type: "builtin",
                             badge: "Default Playlist",
-                            itemCount: wlIds.length,
-                            items: wlIds,
-                            coverClaimId: wlIds[0] || null,
-                            updatedAt: wl.updatedAt || 0
-                        });
-                    }
-
-                    // 2. Built-in: Favorites
-                    if (shared.builtinCollections && shared.builtinCollections.favorites) {
-                        var fav = shared.builtinCollections.favorites;
-                        var favIds = [];
-                        if (Array.isArray(fav.items)) {
-                            for (var fi = 0; fi < fav.items.length; fi++) {
-                                var fm = /[0-9a-f]{40}/i.exec(fav.items[fi]);
-                                if (fm) favIds.push(fm[0]);
-                            }
-                        }
-                        playlists.push({
-                            id: "favorites",
-                            name: "Favorites",
-                            type: "builtin",
-                            badge: "Default Playlist",
-                            itemCount: favIds.length,
-                            items: favIds,
-                            coverClaimId: favIds[0] || null,
-                            updatedAt: fav.updatedAt || 0
+                            itemCount: cachedRemoteWatchLaterIds.length,
+                            items: cachedRemoteWatchLaterIds,
+                            coverClaimId: cachedRemoteWatchLaterIds[0] || null,
+                            updatedAt: 0
                         });
                     }
 
                     // 3. Unpublished (Private / Unlisted)
-                    if (shared.unpublishedCollections && typeof shared.unpublishedCollections === "object") {
-                        for (var unpId in shared.unpublishedCollections) {
-                            if (!shared.unpublishedCollections.hasOwnProperty(unpId)) continue;
-                            var unp = shared.unpublishedCollections[unpId];
-                            if (!unp) continue;
-                            var unpIds = [];
-                            if (Array.isArray(unp.items)) {
-                                for (var ui = 0; ui < unp.items.length; ui++) {
-                                    var um = /[0-9a-f]{40}/i.exec(unp.items[ui]);
-                                    if (um) unpIds.push(um[0]);
-                                }
-                            }
-                            playlists.push({
-                                id: unp.id || unpId,
-                                name: unp.name || unp.title || "Custom Playlist",
-                                type: "unpublished",
-                                badge: "Private",
-                                itemCount: unpIds.length,
-                                items: unpIds,
-                                coverClaimId: unpIds[0] || null,
-                                updatedAt: unp.updatedAt || 0
-                            });
-                        }
+                    var unpublished = shared.unpublishedCollections || shared.unpublished_collections || {};
+                    for (var unpId in unpublished) {
+                        if (!unpublished.hasOwnProperty(unpId)) continue;
+                        var unp = unpublished[unpId];
+                        if (!unp) continue;
+                        var unpIds = extractClaimIdsFromCollection(unp);
+                        playlists.push({
+                            id: unp.id || unpId,
+                            name: unp.name || unp.title || "Custom Playlist",
+                            type: "unpublished",
+                            badge: "Private",
+                            itemCount: unpIds.length,
+                            items: unpIds,
+                            coverClaimId: unpIds[0] || null,
+                            updatedAt: unp.updatedAt || 0
+                        });
                     }
                 }
 
@@ -643,9 +684,8 @@ var UserData = (function () {
             for (var ci = 0; ci < cachedList.length; ci++) {
                 var cEntry = cachedList[ci];
                 var cUri = (typeof cEntry === "string") ? cEntry : (cEntry && cEntry.uri ? cEntry.uri : "");
-                var cMatch = /[0-9a-f]{40}/i.exec(cUri);
+                var cId = extractClaimIdFromItem(cEntry);
                 var cNameMatch = /@([^\/#:]+)/.exec(cUri);
-                var cId = cMatch ? cMatch[0] : (cEntry && (cEntry.claim_id || cEntry.channel_id));
                 var cName = cNameMatch ? ("@" + cNameMatch[1]) : (cEntry && (cEntry.channel_name || cEntry.name));
                 if (cId) addChannel(cId, cName);
             }
@@ -659,6 +699,7 @@ var UserData = (function () {
                 doneCount++;
                 if (!isFinished && doneCount >= 2) {
                     isFinished = true;
+                    console.log("UserData: getFollowedChannels finished with " + results.length + " channel(s).");
                     cachedFollowedChannels = results;
                     callback(null, results);
                 }
@@ -668,15 +709,17 @@ var UserData = (function () {
             setTimeout(function () {
                 if (!isFinished) {
                     isFinished = true;
+                    console.log("UserData: getFollowedChannels safety timeout reached with " + results.length + " channel(s).");
                     cachedFollowedChannels = results;
                     callback(null, results);
                 }
             }, 3500);
 
             // A) /subscription/list via internal API
-            if (token) {
-                var data = { auth_token: token };
-                LbryIo.call("/subscription/list", { method: "POST", data: data }, function (err, resp) {
+            if (token || (window.Auth && Auth.getAccessToken())) {
+                var data = {};
+                if (token) data.auth_token = token;
+                LbryIo.call("/subscription/list", { method: "POST", data: data, useBearer: true }, function (err, resp) {
                     if (!err && resp && resp.success && Array.isArray(resp.data)) {
                         for (var i = 0; i < resp.data.length; i++) {
                             var item = resp.data[i];
@@ -692,7 +735,7 @@ var UserData = (function () {
 
             // B) shared preferences (preference_get key="shared")
             LbryRpc.call("preference_get", { key: "shared" }, function (err, res) {
-                var shared = (!err && res && res.shared && res.shared.value) ? res.shared.value : cachedSharedPreferences;
+                var shared = parseSharedPreference(res) || cachedSharedPreferences;
                 if (shared) {
                     cachedSharedPreferences = shared;
                     var list = [];
@@ -702,9 +745,8 @@ var UserData = (function () {
                     for (var j = 0; j < list.length; j++) {
                         var entry = list[j];
                         var uri = (typeof entry === "string") ? entry : (entry && entry.uri ? entry.uri : "");
-                        var cidMatch = /[0-9a-f]{40}/i.exec(uri);
+                        var cid = extractClaimIdFromItem(entry);
                         var nameMatch = /@([^\/#:]+)/.exec(uri);
-                        var cid = cidMatch ? cidMatch[0] : (entry && (entry.claim_id || entry.channel_id));
                         var name = nameMatch ? ("@" + nameMatch[1]) : (entry && (entry.channel_name || entry.name));
                         if (cid) addChannel(cid, name);
                     }
@@ -746,18 +788,20 @@ var UserData = (function () {
             channelName = "@" + channelName;
         }
         LbryNet.ensureAuthToken(function (token) {
-            if (!token) {
+            if (!token && (!window.Auth || !Auth.getAccessToken())) {
                 return callback && callback(new Error("No auth token available"));
             }
             var data = {
                 claim_id: claimId,
                 channel_name: channelName || "",
-                notifications_disabled: "true",
-                auth_token: token
+                notifications_disabled: "true"
             };
+            if (token) data.auth_token = token;
+
             LbryIo.call("/subscription/new", {
                 method: "POST",
-                data: data
+                data: data,
+                useBearer: true
             }, function (err, resp) {
                 if (!err && resp && resp.success) {
                     if (cachedFollowedChannels) {
@@ -815,16 +859,18 @@ var UserData = (function () {
     function unfollowChannel(claimId, channelName, callback) {
         if (!claimId) return callback && callback(new Error("claimId required"));
         LbryNet.ensureAuthToken(function (token) {
-            if (!token) {
+            if (!token && (!window.Auth || !Auth.getAccessToken())) {
                 return callback && callback(new Error("No auth token available"));
             }
             var data = {
-                claim_id: claimId,
-                auth_token: token
+                claim_id: claimId
             };
+            if (token) data.auth_token = token;
+
             LbryIo.call("/subscription/delete", {
                 method: "POST",
-                data: data
+                data: data,
+                useBearer: true
             }, function (err, resp) {
                 if (!err && resp && resp.success) {
                     if (cachedFollowedChannels) {
