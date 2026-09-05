@@ -119,6 +119,10 @@ document.addEventListener("DOMContentLoaded", function () {
             } else {
                 Player.close();
             }
+        } else if (window.isPlaylistDetailOpen) {
+            if (window.Feed && typeof Feed.closePlaylistDetail === "function") {
+                Feed.closePlaylistDetail(false, true);
+            }
         } else if (window.isChannelPageOpen) {
             Channel.close();
         }
@@ -128,6 +132,18 @@ document.addEventListener("DOMContentLoaded", function () {
     window.addEventListener("keydown", function (e) {
         var playerEl = document.getElementById("player-container");
         var isPlayerOpen = playerEl && !playerEl.classList.contains("hidden");
+
+        if (!isPlayerOpen && window.isPlaylistDetailOpen) {
+            var keyCode = e.keyCode;
+            if (413 === keyCode || 461 === keyCode || 8 === keyCode || 27 === keyCode || 10009 === keyCode) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.Feed && typeof Feed.closePlaylistDetail === "function") {
+                    Feed.closePlaylistDetail();
+                }
+                return;
+            }
+        }
 
         if (!isPlayerOpen && window.isChannelPageOpen) {
             var keyCode = e.keyCode;

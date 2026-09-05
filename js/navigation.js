@@ -16,6 +16,7 @@ var Navigation = (function () {
         if ("nav-profile" === id) return "Profile";
         if ("nav-following" === id) return "Following";
         if ("nav-watch-later" === id) return "Watch Later";
+        if ("nav-playlists" === id) return "Playlists";
         var key = 0 === id.indexOf("cat:") ? id.substring(4) : "";
         for (var i = 0; i < navSections.length; i++)
             if (navSections[i].key === key) return navSections[i].label;
@@ -27,11 +28,17 @@ var Navigation = (function () {
         if (!img) return;
         if (window.Auth && Auth.isLoggedIn()) {
             var rawAvatar = Auth.getAvatarUrl();
-            var processed = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(rawAvatar, 160) : rawAvatar;
-            img.src = processed;
+            var processed = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatar, 160) : rawAvatar;
+            var isSpaceman = (!processed || processed === "icons/spaceman.png");
+            var user = Auth.getUser ? Auth.getUser() : {};
+            var chName = user ? (user.channelName || "") : "";
+            var avatarColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : "transparent";
+            img.src = processed || "icons/spaceman.png";
+            img.style.backgroundColor = avatarColor;
             img.className = "logo-img user-avatar";
         } else {
             img.src = "icons/icon.png";
+            img.style.backgroundColor = "";
             img.className = "logo-img";
         }
     }
@@ -78,6 +85,7 @@ var Navigation = (function () {
             items.push({ id: "nav-profile", label: "Profile" });
             items.push({ id: "nav-following", label: "Following" });
             items.push({ id: "nav-watch-later", label: "Watch Later" });
+            items.push({ id: "nav-playlists", label: "Playlists" });
         } else {
             items.push({ id: "nav-login", label: "Login" });
         }

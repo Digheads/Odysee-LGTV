@@ -292,7 +292,7 @@ var Auth = (function () {
                     state.user.avatarUrl = DEFAULT_AVATAR;
                 }
 
-                // Fetch subscriber count via LbryIo without circular OdyseeAPI dependency
+                // Fetch follower count via LbryIo without circular OdyseeAPI dependency
                 if (state.user.channelClaimId) {
                     LbryIo.call("/subscription/sub_count", { data: { claim_id: state.user.channelClaimId } }, function (subErr, subRes) {
                         if (!subErr && subRes && subRes.data && subRes.data.length > 0 && typeof subRes.data[0] === "number") {
@@ -364,6 +364,12 @@ var Auth = (function () {
         isLoggedIn: isLoggedIn,
 
         getAccessToken: function () {
+            if (state.expiresAt && Date.now() >= state.expiresAt) {
+                if (state.refreshToken && !pollingTimer) {
+                    refreshToken(function () {});
+                }
+                return null;
+            }
             return state.accessToken;
         },
 

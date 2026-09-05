@@ -110,7 +110,9 @@ var LbryRpc = (function () {
         }
 
         var url = PROXY_URL;
-        if ("get" === method) url += "?m=get";
+        if ("get" === method || "preference_get" === method || "preference_set" === method) {
+            url += "?m=" + method;
+        }
 
         console.log("LbryRpc: [" + method + "] Request. Params: " + JSON.stringify(params));
         var xhr = new XMLHttpRequest();
@@ -119,6 +121,11 @@ var LbryRpc = (function () {
 
         if (window.Auth && typeof Auth.getAccessToken === "function" && Auth.getAccessToken()) {
             xhr.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
+        }
+
+        var internalToken = (window.Auth && typeof Auth.getInternalAuthToken === "function" && Auth.getInternalAuthToken()) || window.odyseeAuthToken;
+        if (internalToken) {
+            xhr.setRequestHeader("X-Lbry-Auth-Token", internalToken);
         }
 
         xhr.timeout = 20000;
@@ -173,15 +180,52 @@ var LbryIo = (function () {
         var method = (options.method || "POST").toUpperCase();
         var url = (0 === path.indexOf("http") ? path : BASE_URL + (path.charAt(0) === "/" ? path : "/" + path));
 
+        // Auto-attach auth_token if available and not already provided
+        var token = (window.Auth && typeof Auth.getInternalAuthToken === "function" && Auth.getInternalAuthToken()) || window.odyseeAuthToken;
+        if (token && options.data && typeof options.data === "object" && !options.data.auth_token) {
+            options.data.auth_token = token;
+        }
+
+        var isJson = options.json === true;
+        var body = null;
+
+        if (options.data) {
+            if (isJson) {
+                body = JSON.stringify(options.data);
+            } else if ("string" === typeof options.data) {
+                if (method === "GET") {
+                    url += (url.indexOf("?") === -1 ? "?" : "&") + options.data;
+                } else {
+                    body = options.data;
+                }
+            } else {
+                var parts = [];
+                for (var key in options.data) {
+                    if (options.data.hasOwnProperty(key) && options.data[key] !== undefined && options.data[key] !== null) {
+                        parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(options.data[key]));
+                    }
+                }
+                var serialized = parts.join("&");
+                if (method === "GET") {
+                    if (serialized) {
+                        url += (url.indexOf("?") === -1 ? "?" : "&") + serialized;
+                    }
+                } else {
+                    body = serialized;
+                }
+            }
+        }
+
         var xhr = new XMLHttpRequest();
         xhr.open(method, url, true);
         xhr.timeout = options.timeout || 15000;
 
-        if (window.Auth && typeof Auth.getAccessToken === "function" && Auth.getAccessToken()) {
+        // Only attach Bearer token for /user/me or if explicitly requested,
+        // because sending expired Bearer tokens breaks api.odysee.com OIDC middleware.
+        if ((path === "/user/me" || options.useBearer === true) && window.Auth && typeof Auth.getAccessToken === "function" && Auth.getAccessToken()) {
             xhr.setRequestHeader("Authorization", "Bearer " + Auth.getAccessToken());
         }
 
-        var isJson = options.json === true;
         if (isJson) {
             xhr.setRequestHeader("Content-Type", "application/json");
         } else if (method === "POST") {
@@ -198,7 +242,12 @@ var LbryIo = (function () {
                         callback(new Error("Failed to parse JSON response from " + path));
                     }
                 } else {
-                    callback(new Error("Request failed with status: " + xhr.status));
+                    try {
+                        var errRes = JSON.parse(xhr.responseText);
+                        callback(new Error((errRes && errRes.error) || ("Request failed with status: " + xhr.status)), errRes);
+                    } catch (e) {
+                        callback(new Error("Request failed with status: " + xhr.status));
+                    }
                 }
             }
         };
@@ -210,24 +259,7 @@ var LbryIo = (function () {
             callback(new Error("Network error for " + path));
         };
 
-        var body = null;
-        if (options.data) {
-            if (isJson) {
-                body = JSON.stringify(options.data);
-            } else if ("string" === typeof options.data) {
-                body = options.data;
-            } else {
-                var parts = [];
-                for (var key in options.data) {
-                    if (options.data.hasOwnProperty(key) && options.data[key] !== undefined && options.data[key] !== null) {
-                        parts.push(encodeURIComponent(key) + "=" + encodeURIComponent(options.data[key]));
-                    }
-                }
-                body = parts.join("&");
-            }
-        }
-
-        xhr.send(body);
+        xhr.send(method === "GET" ? null : body);
     }
 
     return {

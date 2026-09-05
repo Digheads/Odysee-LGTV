@@ -56,7 +56,7 @@ var SpatialNavigation = function () {
                     }
                 }
             }
-            if (n.classList.contains("channel-header")) {
+            if (n.classList.contains("channel-header") || n.id === "btn-channel-follow" || n.classList.contains("btn-channel-follow")) {
                 var c = document.getElementById("main-content");
                 if (c) c.scrollTop = 0;
             }
@@ -109,8 +109,17 @@ var SpatialNavigation = function () {
 
                 if (a.keyCode === 39 && i.classList.contains("nav-item")) {
                     if (window.isChannelPageOpen) {
+                        var followBtn = document.getElementById("btn-channel-follow");
+                        if (followBtn && followBtn.style.display !== "none" && followBtn.classList.contains("focusable")) {
+                            var followIdx = e.indexOf(followBtn);
+                            if (followIdx !== -1) {
+                                a.preventDefault();
+                                n(followIdx);
+                                return;
+                            }
+                        }
                         var cpHeader = document.getElementById("cp-header");
-                        if (cpHeader) {
+                        if (cpHeader && cpHeader.classList.contains("focusable")) {
                             var cpIdx = e.indexOf(cpHeader);
                             if (cpIdx !== -1) {
                                 a.preventDefault();
@@ -120,20 +129,20 @@ var SpatialNavigation = function () {
                         }
                     }
                     for (var k = 0; k < e.length; k++) {
-                        if (e[k].classList.contains("video-card") || e[k].id === "search-input" || e[k].id === "btn-search" || e[k].id === "cp-header") {
+                        if (e[k].classList.contains("video-card") || e[k].classList.contains("playlist-card") || e[k].id === "search-input" || e[k].id === "btn-search" || (e[k].id === "cp-header" && e[k].classList.contains("focusable")) || (e[k].id === "btn-channel-follow" && e[k].style.display !== "none")) {
                             a.preventDefault();
                             n(k);
                             return;
                         }
                     }
                 }
-                var isVideoCard = i.classList.contains("video-card");
-                var isChannelHeader = i.id === "cp-header" || i.classList.contains("channel-header");
+                var isVideoCard = i.classList.contains("video-card") || i.classList.contains("playlist-card");
+                var isChannelHeader = i.id === "cp-header" || i.classList.contains("channel-header") || i.id === "btn-channel-follow" || i.classList.contains("btn-channel-follow");
                 for (var o = c(i), s = -1, r = 1 / 0, f = 0; f < e.length; f++)
                     if (f !== t) {
                         if (isVideoCard && (a.keyCode === 37 || a.keyCode === 39) && (e[f].id === "search-input" || e[f].id === "btn-search")) continue;
                         if (isVideoCard && a.keyCode !== 37 && e[f].classList.contains("nav-item")) continue;
-                        if (isChannelHeader && a.keyCode === 37 && e[f].classList.contains("video-card")) continue;
+                        if (isChannelHeader && a.keyCode === 37 && (e[f].classList.contains("video-card") || e[f].classList.contains("playlist-card"))) continue;
                         
                         var l = c(e[f]),
                             h = l.cx - o.cx,
@@ -146,8 +155,8 @@ var SpatialNavigation = function () {
                                 break;
                             case 38:
                                 if (l.cy < o.cy) {
-                                    if (e[f].id === "search-input" || e[f].id === "btn-search" || e[f].id === "cp-header") {
-                                        v = !0; // Relax horizontal constraint for wide search header
+                                    if (e[f].id === "search-input" || e[f].id === "btn-search" || e[f].id === "cp-header" || e[f].id === "btn-channel-follow") {
+                                        v = !0; // Relax horizontal constraint for wide search header / channel header / follow button
                                     } else if (Math.abs(h) <= Math.abs(d)) {
                                         v = !0;
                                     }
@@ -157,7 +166,13 @@ var SpatialNavigation = function () {
                                 l.cx > o.cx && Math.abs(d) <= Math.abs(h) && (v = !0);
                                 break;
                             case 40:
-                                l.cy > o.cy && Math.abs(h) <= Math.abs(d) && (v = !0);
+                                if (l.cy > o.cy) {
+                                    if (o.id === "btn-channel-follow" || o.id === "cp-header") {
+                                        v = !0; // Relax horizontal constraint when moving down from header / follow button
+                                    } else if (Math.abs(h) <= Math.abs(d)) {
+                                        v = !0;
+                                    }
+                                }
                                 break;
                             case 13:
                                 a.preventDefault();

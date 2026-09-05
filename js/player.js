@@ -15,6 +15,13 @@ var Player = (function () {
     var last_progress_report = 0;
     var isPlayerActive = false;
     var isCommentsOpen = false;
+    var isRelatedShelfOpen = false;
+    var activeShelfRow = 0;
+    var shelfIndices = [0, 0];
+    var SHELF_STATE = { HIDDEN: 0, PEEK: 1, ACTIVE: 2 };
+    var currentShelfState = SHELF_STATE.HIDDEN;
+    var cachedShelfCards = [[], []];
+    var currentPlayerFocused = null;
 
     function clearStall() {
         if (stallTimer) {
@@ -89,6 +96,144 @@ var Player = (function () {
         isCommentsOpen = false;
     }
 
+    function updatePlayerChannelHeader(claim) {
+        var channelInfo = document.getElementById("player-channel-info");
+        var channelAvatar = document.getElementById("player-channel-avatar");
+        var channelName = document.getElementById("player-channel-name");
+        if (!channelInfo) return;
+
+        var ch = claim ? claim.signing_channel : null;
+        if (ch) {
+            var chTitle = (ch.value && ch.value.title) ? ch.value.title : (ch.name || "");
+            var rawAvatar = (ch.value && ch.value.thumbnail) ? ch.value.thumbnail.url : "";
+            var avUrl = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatar, 64) : (rawAvatar ? Utils.thumbUrl(rawAvatar, 64) : "icons/spaceman.png");
+            var isSpaceman = (!avUrl || avUrl === "icons/spaceman.png");
+            var chColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(ch.name) : "transparent";
+            if (channelName) channelName.textContent = chTitle;
+            if (channelAvatar) {
+                channelAvatar.src = avUrl;
+                channelAvatar.style.backgroundColor = chColor;
+            }
+            channelInfo.style.display = "-webkit-flex";
+        } else {
+            channelInfo.style.display = "none";
+        }
+    }
+
+    function createRelatedCardElement(claim, shelfRow, index) {
+        if (!claim || !claim.value) return null;
+        var card = document.createElement("div");
+        card.className = "related-card focusable";
+        card.tabIndex = 0;
+        card.setAttribute("data-shelf", shelfRow);
+        card.setAttribute("data-index", index);
+        card.claimData = claim;
+
+        var title = claim.value.title || "Untitled";
+        var thumbUrl = Utils.thumbUrl(claim.value.thumbnail ? claim.value.thumbnail.url : "", 320, 180);
+        var ch = claim.signing_channel;
+        var chName = ch ? ((ch.value && ch.value.title) ? ch.value.title : (ch.name || "")) : "";
+
+        var duration = (claim.value && claim.value.video) ? claim.value.video.duration : 0;
+        var durHtml = "";
+        if (duration > 0) {
+            durHtml = '<div class="related-duration">' + Utils.formatDuration(duration, duration) + '</div>';
+        }
+
+        var html = '<div class="related-thumb-wrap">' +
+            '<img class="related-thumb" src="' + Utils.escapeHtml(thumbUrl) + '" onerror="this.src=\'icons/icon.png\'" />' +
+            durHtml +
+            '</div>' +
+            '<div class="related-info">' +
+            '<div class="related-title">' + Utils.escapeHtml(title) + '</div>' +
+            (chName ? ('<div class="related-channel">' + Utils.escapeHtml(chName) + '</div>') : '') +
+            '</div>';
+
+        card.innerHTML = html;
+        card.onclick = function (evt) {
+            if (evt) evt.stopPropagation();
+            Player.playVideo(claim);
+        };
+        return card;
+    }
+
+    function resetAndLoadRelatedShelf(claim) {
+        var shelf = document.getElementById("player-related-shelf");
+        var scrollEl = document.getElementById("player-shelves-scroll");
+        var chSec = document.getElementById("shelf-channel-section");
+        var chTitle = document.getElementById("shelf-channel-title");
+        var chRow = document.getElementById("shelf-channel-row");
+        var relSec = document.getElementById("shelf-related-section");
+        var relRow = document.getElementById("shelf-related-row");
+
+        if (shelf) {
+            shelf.classList.remove("visible");
+            shelf.classList.remove("hidden");
+            shelf.classList.remove("fade-out");
+            shelf.classList.add("peek");
+        }
+        if (scrollEl) {
+            scrollEl.style.webkitTransform = "translate3d(0, 0, 0)";
+            scrollEl.style.transform = "translate3d(0, 0, 0)";
+        }
+        currentShelfState = SHELF_STATE.PEEK;
+        isRelatedShelfOpen = false;
+        activeShelfRow = 0;
+        shelfIndices = [0, 0];
+        cachedShelfCards = [[], []];
+
+        if (chRow) chRow.innerHTML = '<div style="color:#9B9FA8; font-size:16px; padding:12px 0;">Loading channel uploads...</div>';
+        if (relRow) relRow.innerHTML = '<div style="color:#9B9FA8; font-size:16px; padding:12px 0;">Loading related videos...</div>';
+
+        if (window.OdyseeAPI && typeof OdyseeAPI.getRelatedVideos === "function" && claim) {
+            OdyseeAPI.getRelatedVideos(claim, function (err, res) {
+                if (err || !res) {
+                    if (chRow) chRow.innerHTML = '<div style="color:#9B9FA8; font-size:16px; padding:12px 0;">No channel videos found.</div>';
+                    if (relRow) relRow.innerHTML = '<div style="color:#9B9FA8; font-size:16px; padding:12px 0;">No related videos found.</div>';
+                    return;
+                }
+
+                var chVids = res.channelVideos || [];
+                var relVids = res.relatedVideos || [];
+                cachedShelfCards = [[], []];
+
+                // Shelf 0: More from Channel
+                if (chVids.length > 0 && chRow && chSec) {
+                    chSec.style.display = "block";
+                    if (chTitle) chTitle.textContent = "More from " + (res.channelTitle || "Channel");
+                    chRow.innerHTML = "";
+                    for (var i = 0; i < chVids.length; i++) {
+                        var card0 = createRelatedCardElement(chVids[i], 0, i);
+                        if (card0) {
+                            chRow.appendChild(card0);
+                            cachedShelfCards[0].push(card0);
+                        }
+                    }
+                } else if (chSec) {
+                    chSec.style.display = "none";
+                    activeShelfRow = 1;
+                }
+
+                // Shelf 1: Related Videos
+                if (relRow && relSec) {
+                    relSec.style.display = "block";
+                    relRow.innerHTML = "";
+                    if (relVids.length > 0) {
+                        for (var j = 0; j < relVids.length; j++) {
+                            var card1 = createRelatedCardElement(relVids[j], 1, j);
+                            if (card1) {
+                                relRow.appendChild(card1);
+                                cachedShelfCards[1].push(card1);
+                            }
+                        }
+                    } else {
+                        relRow.innerHTML = '<div style="color:#9B9FA8; font-size:16px; padding:12px 0;">No related videos found.</div>';
+                    }
+                }
+            });
+        }
+    }
+
     function setSources(video, list) {
         video.removeAttribute("src");
         video.innerHTML = "";
@@ -109,6 +254,26 @@ var Player = (function () {
     function closePlayer() {
         isPlayerActive = false;
         closeCommentsSidebar();
+        if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") {
+            SpatialNavigation.unlock();
+        }
+        var shelf = document.getElementById("player-related-shelf");
+        var scrollEl = document.getElementById("player-shelves-scroll");
+        if (shelf) {
+            shelf.classList.remove("visible");
+            shelf.classList.remove("peek");
+            shelf.classList.add("hidden");
+        }
+        if (scrollEl) {
+            scrollEl.style.webkitTransform = "translate3d(0, 0, 0)";
+            scrollEl.style.transform = "translate3d(0, 0, 0)";
+        }
+        currentShelfState = SHELF_STATE.HIDDEN;
+        isRelatedShelfOpen = false;
+        activeShelfRow = 0;
+        shelfIndices = [0, 0];
+        cachedShelfCards = [[], []];
+        currentPlayerFocused = null;
         var aEl = document.getElementById("progress-fill");
         if (aEl) {
             aEl.classList.remove("seeking");
@@ -118,6 +283,7 @@ var Player = (function () {
         clearStall();
         stopWatchdog();
         clearReconnectStall();
+        isReconnecting = false;
         var e = document.getElementById("player-container"),
             t = document.getElementById("video-player");
 
@@ -528,6 +694,11 @@ var Player = (function () {
         i.removeAttribute("src");
         i.src = "";
         if (a) a.textContent = e.value.title || "Unknown Title";
+        updatePlayerChannelHeader(e);
+        resetAndLoadRelatedShelf(e);
+        if (window.SpatialNavigation && typeof SpatialNavigation.lock === "function") {
+            SpatialNavigation.lock();
+        }
         if (n) n.classList.remove("hidden");
         if (o) o.style.display = "block";
 
@@ -695,11 +866,19 @@ var Player = (function () {
         stuckCount = 0;
     }
 
+    var isReconnecting = false;
+
     function reconnectStream(savedTime) {
         var n = document.getElementById("video-player"),
             c = document.getElementById("player-loading"),
             playerError = document.getElementById("player-error");
         if (!n) return;
+
+        if (isReconnecting) {
+            console.log("Watchdog: reconnect already in progress, ignoring duplicate trigger");
+            return;
+        }
+        isReconnecting = true;
 
         stopWatchdog();
         clearReconnectStall();
@@ -708,6 +887,7 @@ var Player = (function () {
         var useM = n.dataset.useMagic === "true";
         if (!raw) {
             console.warn("Watchdog: no rawUrl stored on player dataset");
+            isReconnecting = false;
             return;
         }
 
@@ -727,9 +907,14 @@ var Player = (function () {
         }
 
         var isRestored = false;
+        var seekTimeout = null;
 
         function cleanupListeners() {
             clearReconnectStall();
+            if (seekTimeout) {
+                clearTimeout(seekTimeout);
+                seekTimeout = null;
+            }
             n.removeEventListener("loadedmetadata", onMeta);
             n.removeEventListener("canplay", onCanPlay);
             n.removeEventListener("seeked", onSeeked);
@@ -738,10 +923,15 @@ var Player = (function () {
         function restorePlayback() {
             if (isRestored) return;
             isRestored = true;
+            isReconnecting = false;
             cleanupListeners();
             if (c) c.style.display = "none";
             n.style.opacity = "1";
             n.muted = wasMuted;
+
+            // Reset proactive pre-warm timer on reconnection
+            window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
+            window._magicPrefetchDone = false;
 
             var p = n.play();
             if (p && typeof p.catch === "function") {
@@ -758,40 +948,57 @@ var Player = (function () {
 
         function onMeta() {
             console.log("Watchdog: loadedmetadata fired, duration=" + n.duration);
-            if (needsSeek && Math.abs(n.currentTime - savedTime) > 0.5) {
+        }
+
+        function onCanPlay() {
+            console.log("Watchdog: canplay fired, readyState=" + n.readyState + " currentTime=" + n.currentTime.toFixed(2));
+            if (!needsSeek) {
+                restorePlayback();
+                return;
+            }
+
+            // If already aligned with savedTime (e.g. via #t= media fragment), restore immediately
+            if (Math.abs(n.currentTime - savedTime) <= 0.5) {
+                console.log("Watchdog: already aligned at " + n.currentTime.toFixed(2) + ", restoring");
+                restorePlayback();
+            } else {
                 console.log("Watchdog: seeking to " + savedTime.toFixed(2));
                 n.addEventListener("seeked", onSeeked);
-                setTimeout(function () {
-                    if (!isRestored) restorePlayback();
-                }, 2000);
                 try {
                     n.currentTime = savedTime;
                 } catch (e) {
                     console.error("Watchdog: error seeking to savedTime", e);
                     restorePlayback();
                 }
-            } else {
-                restorePlayback();
-            }
-        }
-
-        function onCanPlay() {
-            console.log("Watchdog: canplay fired");
-            if (!needsSeek) {
-                restorePlayback();
             }
         }
 
         // Apply new source directly to video element (avoiding WebKit <source> replacement quirks)
         function applySource(urlToUse) {
+            var finalUrl = urlToUse;
+            if (needsSeek) {
+                var clean = urlToUse.split("#")[0];
+                finalUrl = clean + "#t=" + savedTime.toFixed(2);
+            }
             console.log("Watchdog: applying direct src. readyState=" + n.readyState + " networkState=" + n.networkState);
+            window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
+            window._magicPrefetchDone = false;
             n.pause();
             n.innerHTML = "";
             n.removeAttribute("src");
             n.addEventListener("loadedmetadata", onMeta);
             n.addEventListener("canplay", onCanPlay);
-            n.src = urlToUse;
+            n.src = finalUrl;
             n.load();
+
+            if (needsSeek) {
+                seekTimeout = setTimeout(function () {
+                    if (!isRestored) {
+                        console.warn("Watchdog: seek/canplay safety timeout fired after 10s");
+                        restorePlayback();
+                    }
+                }, 10000);
+            }
         }
 
         // Perform warmup HEAD with status check & 429 fallback
@@ -835,24 +1042,19 @@ var Player = (function () {
         };
         warmXhr.send();
 
-        // Safety fallback timeout: if neither fires within 8 seconds, retry with alternate mode
+        // Safety fallback timeout: if neither fires within 15 seconds, retry with alternate mode
         reconnectStallTimer = setTimeout(function () {
             if (isRestored) return;
             console.warn("Watchdog: reconnection stalled 15s (readyState=" + n.readyState + " networkState=" + n.networkState + "). Attempting pipeline recovery...");
             cleanupListeners();
+            isReconnecting = false;
             var currentUseMagic = n.dataset.useMagic === "true";
             var nextUseMagic = !currentUseMagic;
             n.dataset.useMagic = nextUseMagic ? "true" : "false";
             var fallbackUrl = Utils.buildPlayableUrl(raw, nextUseMagic);
             console.log("Watchdog: retrying with " + (nextUseMagic ? "magic" : "cacheable (no magic)") + " -> " + fallbackUrl);
 
-            n.pause();
-            n.innerHTML = "";
-            n.removeAttribute("src");
-            n.addEventListener("loadedmetadata", onMeta);
-            n.addEventListener("canplay", onCanPlay);
-            n.src = fallbackUrl;
-            n.load();
+            applySource(fallbackUrl);
         }, 15000);
     }
 
@@ -869,10 +1071,10 @@ var Player = (function () {
                 try {
                     if (n.paused || n.ended || n.seeking) return;
 
-                    // Proactive magic link pre-refresh around 280-285 seconds (before 300s expiry)
+                    // Proactive magic link pre-refresh around 260s (before 300s expiry)
                     if (window._magicUrlStartedAt && !window._magicPrefetchDone) {
                         var elapsed = (Date.now() / 1000) - window._magicUrlStartedAt;
-                        if (elapsed >= 280 && elapsed < 298) {
+                        if (elapsed >= 260) {
                             window._magicPrefetchDone = true;
                             var rawU = n.dataset.rawUrl;
                             if (rawU && window._activeClaim && window._activeClaim.claim_id) {
@@ -924,6 +1126,8 @@ var Player = (function () {
             t = document.getElementById("player-container"),
             n = document.getElementById("video-player"),
             i = document.getElementById("btn-play-pause"),
+            headerEl = document.getElementById("player-header"),
+            shelfEl = document.getElementById("player-related-shelf"),
             o = document.getElementById("player-title"),
             a = document.getElementById("progress-fill"),
             r = document.getElementById("time-display"),
@@ -932,38 +1136,108 @@ var Player = (function () {
 
         if (!t || !n) return;
 
-        function showControls() {
+        function scrollShelvesVertical(targetShelfRow) {
+            var scrollEl = document.getElementById("player-shelves-scroll");
+            if (!scrollEl) return;
+            if (targetShelfRow === 1) {
+                scrollEl.style.webkitTransform = "translate3d(0, -275px, 0)";
+                scrollEl.style.transform = "translate3d(0, -275px, 0)";
+            } else {
+                scrollEl.style.webkitTransform = "translate3d(0, 0, 0)";
+                scrollEl.style.transform = "translate3d(0, 0, 0)";
+            }
+        }
+
+        function scrollRelatedCardIntoView(card, colIndex) {
+            if (!card) return;
+            var row = card.parentElement;
+            if (!row) return;
+            var col = (typeof colIndex === "number") ? colIndex : (parseInt(card.getAttribute("data-index"), 10) || 0);
+            var targetScroll = col > 0 ? (col * 270 - 40) : 0;
+            if (Math.abs(row.scrollLeft - targetScroll) > 10) {
+                row.scrollLeft = targetScroll;
+            }
+        }
+
+        function getCardAtShelf(shelfRow, colIndex) {
+            if (!cachedShelfCards[shelfRow] || !cachedShelfCards[shelfRow].length) {
+                var row = document.querySelector('.related-videos-row[data-shelf="' + shelfRow + '"]');
+                if (!row) return null;
+                var domCards = row.querySelectorAll(".related-card");
+                if (!domCards || !domCards.length) return null;
+                var idx = Math.max(0, Math.min(domCards.length - 1, colIndex));
+                return domCards[idx];
+            }
+            var idx = Math.max(0, Math.min(cachedShelfCards[shelfRow].length - 1, colIndex));
+            return cachedShelfCards[shelfRow][idx] || null;
+        }
+
+        function scheduleHide(delay) {
+            clearTimeout(hideTimer);
+            if (!n.paused) {
+                var timeout = (typeof delay === "number") ? delay : ((currentShelfState === SHELF_STATE.ACTIVE) ? 25000 : 4000);
+                hideTimer = setTimeout(hideControls, timeout);
+            }
+        }
+
+        function showControls(delay) {
             if (!t.classList.contains("hidden")) {
                 if (l) l.classList.remove("fade-out");
-                if (o) o.classList.remove("fade-out");
-                clearTimeout(hideTimer);
-                hideTimer = setTimeout(hideControls, 4000);
+                if (headerEl) headerEl.classList.remove("fade-out");
+                else if (o) o.classList.remove("fade-out");
+                if (shelfEl) {
+                    shelfEl.classList.remove("fade-out");
+                    if (currentShelfState === SHELF_STATE.ACTIVE) {
+                        shelfEl.classList.remove("peek");
+                        shelfEl.classList.add("visible");
+                    } else {
+                        shelfEl.classList.remove("visible");
+                        shelfEl.classList.add("peek");
+                        currentShelfState = SHELF_STATE.PEEK;
+                    }
+                }
+                scheduleHide(delay);
             }
         }
 
         function hideControls() {
             if (!n.paused) {
                 if (l) l.classList.add("fade-out");
-                if (o) o.classList.add("fade-out");
+                if (headerEl) headerEl.classList.add("fade-out");
+                else if (o) o.classList.add("fade-out");
+                if (shelfEl) {
+                    shelfEl.classList.remove("visible");
+                    shelfEl.classList.remove("peek");
+                    shelfEl.classList.add("fade-out");
+                }
+                scrollShelvesVertical(0);
+                currentShelfState = SHELF_STATE.HIDDEN;
+                isRelatedShelfOpen = false;
                 setPlayerFocus(i);
             }
         }
 
         function getPlayerFocusedButton() {
-            var el = document.querySelector(".btn-player-reaction.focused, .btn-player-comments.focused, .btn-play-pause.focused");
-            return el || i;
+            if (currentPlayerFocused && document.contains(currentPlayerFocused)) {
+                return currentPlayerFocused;
+            }
+            var el = document.querySelector(".btn-player-reaction.focused, .btn-player-comments.focused, .btn-play-pause.focused, .related-card.focused");
+            currentPlayerFocused = el || i;
+            return currentPlayerFocused;
         }
 
         function setPlayerFocus(targetEl) {
             if (!targetEl) return;
-            var prevFocused = document.querySelectorAll("#player-container .focused");
-            for (var pf = 0; pf < prevFocused.length; pf++) {
-                prevFocused[pf].classList.remove("focused");
+            if (currentPlayerFocused && currentPlayerFocused !== targetEl) {
+                currentPlayerFocused.classList.remove("focused");
+            } else if (!currentPlayerFocused) {
+                var prevFocused = document.querySelectorAll("#player-container .focused");
+                for (var pf = 0; pf < prevFocused.length; pf++) {
+                    prevFocused[pf].classList.remove("focused");
+                }
             }
             targetEl.classList.add("focused");
-            if (window.SpatialNavigation && typeof SpatialNavigation.focusNode === "function") {
-                SpatialNavigation.focusNode(targetEl);
-            }
+            currentPlayerFocused = targetEl;
         }
 
         var btnCommentsEl = document.getElementById("btn-comments");
@@ -1080,6 +1354,9 @@ var Player = (function () {
                 var btnDislike = document.getElementById("btn-dislike");
                 var btnComments = document.getElementById("btn-comments");
                 var focusedBtn = getPlayerFocusedButton();
+                var isRelatedCardFocused = focusedBtn && focusedBtn.classList.contains("related-card");
+                var curShelf = isRelatedCardFocused ? (parseInt(focusedBtn.getAttribute("data-shelf"), 10) || 0) : 0;
+                var curCol = isRelatedCardFocused ? (parseInt(focusedBtn.getAttribute("data-index"), 10) || 0) : 0;
 
                 // 1. Dedicated Media Play / Pause keys
                 if (415 === keyCode || 19 === keyCode || 179 === keyCode) {
@@ -1098,7 +1375,13 @@ var Player = (function () {
                 // 3. OK / Enter key (13)
                 if (13 === keyCode) {
                     e.preventDefault();
-                    if (focusedBtn === btnComments || (focusedBtn && focusedBtn.id === "btn-comments")) {
+                    if (isRelatedCardFocused) {
+                        if (focusedBtn.claimData) {
+                            Player.playVideo(focusedBtn.claimData);
+                        } else {
+                            focusedBtn.click();
+                        }
+                    } else if (focusedBtn === btnComments || (focusedBtn && focusedBtn.id === "btn-comments")) {
                         var cClaim = window._activeClaim;
                         if (cClaim && cClaim.claim_id) openCommentsSidebar(cClaim.claim_id);
                     } else if (focusedBtn) {
@@ -1112,7 +1395,33 @@ var Player = (function () {
                 // 4. UP Arrow (38)
                 if (38 === keyCode) {
                     e.preventDefault();
-                    if (focusedBtn === i) {
+                    if (isRelatedCardFocused) {
+                        if (curShelf === 1) {
+                            // On Shelf 1 (Related): check if Shelf 0 (Channel) exists and has cards
+                            var hasShelf0 = cachedShelfCards[0] && cachedShelfCards[0].length > 0;
+                            if (hasShelf0) {
+                                activeShelfRow = 0;
+                                var upCard = getCardAtShelf(0, shelfIndices[0]);
+                                if (upCard) {
+                                    setPlayerFocus(upCard);
+                                    scrollRelatedCardIntoView(upCard, shelfIndices[0]);
+                                    scrollShelvesVertical(0);
+                                    scheduleHide(25000);
+                                    return;
+                                }
+                            }
+                        }
+                        // From Shelf 0 (or Shelf 1 if Shelf 0 not present): float back down to Peeking state & Play/Pause
+                        if (shelfEl) {
+                            shelfEl.classList.remove("visible");
+                            shelfEl.classList.add("peek");
+                        }
+                        currentShelfState = SHELF_STATE.PEEK;
+                        isRelatedShelfOpen = false;
+                        scrollShelvesVertical(0);
+                        setPlayerFocus(i);
+                        scheduleHide(4000);
+                    } else if (focusedBtn === i) {
                         // From play/pause (bottom), move UP to comments first
                         if (btnComments) {
                             setPlayerFocus(btnComments);
@@ -1133,7 +1442,25 @@ var Player = (function () {
                 // 5. DOWN Arrow (40)
                 if (40 === keyCode) {
                     e.preventDefault();
-                    if (focusedBtn === btnLike || focusedBtn === btnDislike) {
+                    if (isRelatedCardFocused) {
+                        if (curShelf === 0) {
+                            // On Shelf 0: move DOWN to Shelf 1
+                            var hasShelf1 = cachedShelfCards[1] && cachedShelfCards[1].length > 0;
+                            if (hasShelf1) {
+                                activeShelfRow = 1;
+                                var downCard = getCardAtShelf(1, shelfIndices[1]);
+                                if (downCard) {
+                                    setPlayerFocus(downCard);
+                                    scrollRelatedCardIntoView(downCard, shelfIndices[1]);
+                                    scrollShelvesVertical(1);
+                                    scheduleHide(25000);
+                                    return;
+                                }
+                            }
+                        }
+                        // On Shelf 1 (bottom-most): absorb DOWN and keep 25s timer
+                        scheduleHide(25000);
+                    } else if (focusedBtn === btnLike || focusedBtn === btnDislike) {
                         // From reactions, move DOWN to comments row before play/pause
                         if (btnComments) {
                             setPlayerFocus(btnComments);
@@ -1143,6 +1470,31 @@ var Player = (function () {
                     } else if (focusedBtn === btnComments) {
                         // From comments, move DOWN to play/pause
                         setPlayerFocus(i);
+                    } else if (focusedBtn === i) {
+                        // From play/pause, expand shelves from PEEK to ACTIVE!
+                        if (shelfEl) {
+                            shelfEl.classList.remove("hidden");
+                            shelfEl.classList.remove("fade-out");
+                            shelfEl.classList.remove("peek");
+                            shelfEl.classList.add("visible");
+                        }
+                        currentShelfState = SHELF_STATE.ACTIVE;
+                        isRelatedShelfOpen = true;
+                        var hasShelf0Check = cachedShelfCards[0] && cachedShelfCards[0].length > 0;
+                        if (!hasShelf0Check && activeShelfRow === 0) {
+                            activeShelfRow = 1;
+                        }
+                        var targetCard = getCardAtShelf(activeShelfRow, shelfIndices[activeShelfRow]);
+                        if (!targetCard && activeShelfRow === 0) {
+                            activeShelfRow = 1;
+                            targetCard = getCardAtShelf(1, shelfIndices[1]);
+                        }
+                        if (targetCard) {
+                            setPlayerFocus(targetCard);
+                            scrollRelatedCardIntoView(targetCard, shelfIndices[activeShelfRow]);
+                            scrollShelvesVertical(activeShelfRow);
+                        }
+                        scheduleHide(25000);
                     }
                     return;
                 }
@@ -1150,7 +1502,17 @@ var Player = (function () {
                 // 6. LEFT Arrow (37)
                 if (37 === keyCode) {
                     e.preventDefault();
-                    if (focusedBtn === btnComments) {
+                    if (isRelatedCardFocused) {
+                        if (curCol > 0) {
+                            shelfIndices[curShelf] = curCol - 1;
+                            var prevCard = getCardAtShelf(curShelf, shelfIndices[curShelf]);
+                            if (prevCard) {
+                                setPlayerFocus(prevCard);
+                                scrollRelatedCardIntoView(prevCard, shelfIndices[curShelf]);
+                            }
+                        }
+                        scheduleHide(25000);
+                    } else if (focusedBtn === btnComments) {
                         if (btnDislike) {
                             setPlayerFocus(btnDislike);
                         } else if (btnLike) {
@@ -1172,7 +1534,18 @@ var Player = (function () {
                 // 7. RIGHT Arrow (39)
                 if (39 === keyCode) {
                     e.preventDefault();
-                    if (focusedBtn === btnLike) {
+                    if (isRelatedCardFocused) {
+                        var numCards = cachedShelfCards[curShelf] ? cachedShelfCards[curShelf].length : 0;
+                        if (curCol < numCards - 1) {
+                            shelfIndices[curShelf] = curCol + 1;
+                            var nextCard = getCardAtShelf(curShelf, shelfIndices[curShelf]);
+                            if (nextCard) {
+                                setPlayerFocus(nextCard);
+                                scrollRelatedCardIntoView(nextCard, shelfIndices[curShelf]);
+                            }
+                        }
+                        scheduleHide(25000);
+                    } else if (focusedBtn === btnLike) {
                         if (btnDislike) {
                             setPlayerFocus(btnDislike);
                         } else if (btnComments) {
@@ -1199,6 +1572,18 @@ var Player = (function () {
                     // other keys
                 } else {
                     e.preventDefault();
+                    if (currentShelfState === SHELF_STATE.ACTIVE || isRelatedShelfOpen || isRelatedCardFocused) {
+                        if (shelfEl) {
+                            shelfEl.classList.remove("visible");
+                            shelfEl.classList.add("peek");
+                        }
+                        currentShelfState = SHELF_STATE.PEEK;
+                        isRelatedShelfOpen = false;
+                        scrollShelvesVertical(0);
+                        setPlayerFocus(i);
+                        scheduleHide(4000);
+                        return;
+                    }
                     history.back();
                 }
             }
@@ -1276,8 +1661,12 @@ var Player = (function () {
             var errCode = n.error ? n.error.code : "unknown";
             console.error("Video error event: code=" + errCode + " on " + (n.currentSrc || ""));
             if (cur > 5 && !n.seeking && window._pendingSeekTime === undefined) {
-                console.log("Watchdog: mid-stream error event at " + cur.toFixed(2) + "s -> instant reconnect!");
-                reconnectStream(cur);
+                if (!isReconnecting) {
+                    console.log("Watchdog: mid-stream error event at " + cur.toFixed(2) + "s -> instant reconnect!");
+                    reconnectStream(cur);
+                } else {
+                    console.log("Watchdog: mid-stream error ignored (reconnect already in flight)");
+                }
             } else {
                 if (c) c.style.display = "none";
             }

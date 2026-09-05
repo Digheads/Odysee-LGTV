@@ -212,7 +212,7 @@ var OdyseeAPI = (function () {
             }, ClaimFilter.filterPlayable(cb));
         },
 
-        getSubscriberCount: function (channelClaimId, cb) {
+        getFollowerCount: function (channelClaimId, cb) {
             LbryNet.ensureAuthToken(function (token) {
                 var data = { claim_id: channelClaimId };
                 if (token) data.auth_token = token;
@@ -223,10 +223,124 @@ var OdyseeAPI = (function () {
                     } else if (!err) {
                         cb(null, 0);
                     } else {
-                        cb(err || new Error("Subscriber count API failed"));
+                        cb(err || new Error("Follower count API failed"));
                     }
                 });
             });
+        },
+
+        getRelatedVideos: function (claim, cb) {
+            if (!claim || !claim.claim_id) return cb(null, { channelTitle: "", channelVideos: [], relatedVideos: [] });
+            var self = this;
+            var currentClaimId = claim.claim_id;
+            var channelClaimId = (claim.signing_channel && claim.signing_channel.claim_id) ? claim.signing_channel.claim_id : null;
+            var channelTitle = (claim.signing_channel && claim.signing_channel.value && claim.signing_channel.value.title) ?
+                claim.signing_channel.value.title : (claim.signing_channel ? claim.signing_channel.name : "");
+            var tags = (claim.value && claim.value.tags) ? claim.value.tags.slice(0, 5) : [];
+            var notTags = self.getBaseNotTags();
+
+            var channelItems = [];
+            var tagItems = [];
+            var pending = 0;
+
+            function finish() {
+                var channelMap = {};
+                var cleanChannel = [];
+                for (var i = 0; i < channelItems.length; i++) {
+                    var cItem = channelItems[i];
+                    if (cItem && cItem.claim_id && cItem.claim_id !== currentClaimId && !channelMap[cItem.claim_id]) {
+                        channelMap[cItem.claim_id] = true;
+                        cleanChannel.push(cItem);
+                    }
+                }
+
+                var relatedMap = {};
+                var cleanRelated = [];
+                for (var j = 0; j < tagItems.length; j++) {
+                    var tItem = tagItems[j];
+                    if (tItem && tItem.claim_id && tItem.claim_id !== currentClaimId && !channelMap[tItem.claim_id] && !relatedMap[tItem.claim_id]) {
+                        relatedMap[tItem.claim_id] = true;
+                        cleanRelated.push(tItem);
+                    }
+                }
+
+                if (cleanRelated.length < 6) {
+                    LbryRpc.call("claim_search", {
+                        claim_type: ["stream"],
+                        stream_types: ["video"],
+                        page_size: 15,
+                        has_no_source: false,
+                        fee_amount: "<=0",
+                        not_claim_ids: [currentClaimId],
+                        not_tags: notTags,
+                        order_by: ["trending_group", "trending_mixed"]
+                    }, ClaimFilter.filterPlayable(function (errTrending, resTrending) {
+                        if (!errTrending && resTrending && resTrending.items) {
+                            for (var k = 0; k < resTrending.items.length; k++) {
+                                var trItem = resTrending.items[k];
+                                if (trItem && trItem.claim_id && trItem.claim_id !== currentClaimId && !channelMap[trItem.claim_id] && !relatedMap[trItem.claim_id]) {
+                                    relatedMap[trItem.claim_id] = true;
+                                    cleanRelated.push(trItem);
+                                }
+                            }
+                        }
+                        cb(null, {
+                            channelTitle: channelTitle,
+                            channelVideos: cleanChannel,
+                            relatedVideos: cleanRelated
+                        });
+                    }));
+                } else {
+                    cb(null, {
+                        channelTitle: channelTitle,
+                        channelVideos: cleanChannel,
+                        relatedVideos: cleanRelated
+                    });
+                }
+            }
+
+            if (channelClaimId) {
+                pending++;
+                LbryRpc.call("claim_search", {
+                    channel_ids: [channelClaimId],
+                    not_claim_ids: [currentClaimId],
+                    claim_type: ["stream"],
+                    stream_types: ["video"],
+                    page_size: 15,
+                    has_no_source: false,
+                    fee_amount: "<=0",
+                    not_tags: notTags,
+                    order_by: ["release_time"]
+                }, ClaimFilter.filterPlayable(function (errCh, resCh) {
+                    if (!errCh && resCh && resCh.items) {
+                        channelItems = resCh.items;
+                    }
+                    pending--;
+                    if (pending === 0) finish();
+                }));
+            }
+
+            pending++;
+            var tagParams = {
+                claim_type: ["stream"],
+                stream_types: ["video"],
+                page_size: 15,
+                has_no_source: false,
+                fee_amount: "<=0",
+                not_claim_ids: [currentClaimId],
+                not_tags: notTags,
+                order_by: ["trending_group", "trending_mixed"]
+            };
+            if (tags.length > 0) {
+                tagParams.any_tags = tags;
+            }
+            LbryRpc.call("claim_search", tagParams, ClaimFilter.filterPlayable(function (errTag, resTag) {
+                if (!errTag && resTag && resTag.items) {
+                    tagItems = resTag.items;
+                }
+                pending--;
+                if (pending === 0) finish();
+            }));
         },
 
         // -------------------------------------------------------------------
@@ -305,8 +419,14 @@ var OdyseeAPI = (function () {
         getWatchLaterVideos: function (cb, page) {
             return UserData.getWatchLaterVideos(cb, page);
         },
-        getSubscribedChannels: function (cb) {
-            return UserData.getSubscribedChannels(cb);
+        getPlaylists: function (cb) {
+            return UserData.getUserPlaylists(cb);
+        },
+        getPlaylistVideos: function (playlist, cb, page) {
+            return UserData.getPlaylistVideos(playlist, cb, page);
+        },
+        getFollowedChannels: function (cb) {
+            return UserData.getFollowedChannels(cb);
         },
         getFollowingVideos: function (cb, page) {
             return UserData.getFollowingVideos(cb, page);

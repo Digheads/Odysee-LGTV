@@ -30,6 +30,26 @@ var Utils = (function () {
         return "https://wsrv.nl/?url=" + encodeURIComponent(u) + "&output=jpg&w=" + w;
     }
 
+    // Odysee 4-color deterministic avatar background mapping:
+    // 0: #748ffc (Soft Blue), 1: #ffa855 (Yellow/Orange), 2: #339af0 (Sky Blue), 3: #ec8383 (Pink/Red)
+    function getAvatarColor(channelName) {
+        if (!channelName) return "#cccccc";
+        var clean = channelName.replace(/^@/, "").trim();
+        if (!clean.length) return "#cccccc";
+        var code = clean.charCodeAt(0) - 65;
+        var idx = Math.abs(code % 4);
+        var colors = ["#748ffc", "#ffa855", "#339af0", "#ec8383"];
+        return colors[idx] || "#cccccc";
+    }
+
+    // Returns local transparent spaceman.png for default avatars (zero network / zero wsrv.nl proxying)
+    function getAvatarSrc(rawUrl, size) {
+        if (!rawUrl || rawUrl === "icons/icon.png" || rawUrl.indexOf("spaceman") !== -1) {
+            return "icons/spaceman.png";
+        }
+        return thumbUrl(rawUrl, size || 160);
+    }
+
     // player.odycdn.com by default marks ALL requests as "flagged" and
     // returns 401, unless an authorized Referer/Origin/User-Agent header arrives.
     // A <video> tag cannot send headers -- however, the
@@ -83,7 +103,9 @@ var Utils = (function () {
         thumbUrl: thumbUrl,
         buildPlayableUrl: buildPlayableUrl,
         formatDuration: formatDuration,
-        formatRelativeTime: formatRelativeTime
+        formatRelativeTime: formatRelativeTime,
+        getAvatarColor: getAvatarColor,
+        getAvatarSrc: getAvatarSrc
     };
 })();
 
@@ -92,3 +114,7 @@ var setDisplayFlex = Utils.setDisplayFlex;
 var escapeHtml = Utils.escapeHtml;
 var thumbUrl = Utils.thumbUrl;
 var buildPlayableUrl = Utils.buildPlayableUrl;
+
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = Utils;
+}
