@@ -15,22 +15,30 @@ var StreamResolver = (function () {
     function getCachedMagicUrl(claimId) {
         if (!claimId || !magicCache[claimId]) return null;
         var entry = magicCache[claimId];
-        var nowSec = Math.floor(Date.now() / 1000);
-        // Ensure at least 15 seconds remain before 285s window expires
+        var nowSec = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === "function") ?
+            OdyseeAPI.getServerNowSec() : Math.floor(Date.now() / 1000);
         if (entry.expiresAt && nowSec < entry.expiresAt - 15) {
             return entry.url;
         }
+        delete magicCache[claimId];
         return null;
     }
 
     function setCachedMagicUrl(claimId, url, createdAtSec) {
         if (!claimId || !url) return;
-        var nowSec = createdAtSec || Math.floor(Date.now() / 1000);
+        var m = url.match(/[?&]magic=(\d+)/);
+        var ts = m ? parseInt(m[1], 10) : (createdAtSec || Math.floor(Date.now() / 1000));
         magicCache[claimId] = {
             url: url,
-            createdAt: nowSec,
-            expiresAt: nowSec + 285 // Valid up to 285s, close to 300s expiration
+            createdAt: ts,
+            expiresAt: ts + 300
         };
+    }
+
+    function clearCachedMagicUrl(claimId) {
+        if (claimId && magicCache[claimId]) {
+            delete magicCache[claimId];
+        }
     }
 
     // The URL of the transcoded HLS master playlist, built from the claim data.
@@ -135,6 +143,7 @@ var StreamResolver = (function () {
         getStreamingSourceUrl: getStreamingSourceUrl,
         reportWatchmanPlayback: reportWatchmanPlayback,
         getCachedMagicUrl: getCachedMagicUrl,
-        setCachedMagicUrl: setCachedMagicUrl
+        setCachedMagicUrl: setCachedMagicUrl,
+        clearCachedMagicUrl: clearCachedMagicUrl
     };
 })();

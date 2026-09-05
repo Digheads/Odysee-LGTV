@@ -372,6 +372,9 @@ var OdyseeAPI = (function () {
         setCachedMagicUrl: function (claimId, url, createdAtSec) {
             return StreamResolver.setCachedMagicUrl(claimId, url, createdAtSec);
         },
+        clearCachedMagicUrl: function (claimId) {
+            return StreamResolver.clearCachedMagicUrl(claimId);
+        },
         reportWatchmanPlayback: function (url, duration, pos, relPos, rebufCount, rebufDur) {
             return StreamResolver.reportWatchmanPlayback(url, duration, pos, relPos, rebufCount, rebufDur);
         },

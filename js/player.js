@@ -893,6 +893,9 @@ var Player = (function () {
 
         var cachedM = (useM && window.StreamResolver && typeof StreamResolver.getCachedMagicUrl === "function" && window._activeClaim) ?
             StreamResolver.getCachedMagicUrl(window._activeClaim.claim_id) : null;
+        if (cachedM && window.StreamResolver && typeof StreamResolver.clearCachedMagicUrl === "function" && window._activeClaim) {
+            StreamResolver.clearCachedMagicUrl(window._activeClaim.claim_id);
+        }
         var newUrl = cachedM || Utils.buildPlayableUrl(raw, useM);
         console.log("Watchdog: reconnecting to " + newUrl + (cachedM ? " [pre-warmed cache]" : "") + " at time " + (savedTime ? savedTime.toFixed(2) : 0));
 
@@ -1060,42 +1063,53 @@ var Player = (function () {
 
     function startWatchdogDelayed() {
         var n = document.getElementById("video-player");
-        if (!n) return;
+        if (!n || n.paused || n.ended) return;
         if (window._watchdogInterval) return;
-        stopWatchdog();
+        if (window._watchdogDelayTimer) return;
         window._watchdogDelayTimer = setTimeout(function () {
+            window._watchdogDelayTimer = null;
+            var playerEl = document.getElementById("video-player");
+            if (!playerEl || playerEl.paused || playerEl.ended) return;
             console.log("Watchdog: armed after 30s of stable playback");
-            lastTime = n.currentTime;
+            lastTime = playerEl.currentTime;
             stuckCount = 0;
             window._watchdogInterval = setInterval(function () {
                 try {
                     if (n.paused || n.ended || n.seeking) return;
 
-                    // Proactive magic link pre-refresh around 260s (before 300s expiry)
-                    if (window._magicUrlStartedAt && !window._magicPrefetchDone) {
-                        var elapsed = (Date.now() / 1000) - window._magicUrlStartedAt;
-                        if (elapsed >= 260) {
-                            window._magicPrefetchDone = true;
+                    // Proactive magic link pre-warm when active stream token reaches 300s
+                    var activeSrc = n.currentSrc || n.src || "";
+                    var mMatch = activeSrc.match(/[?&]magic=(\d+)/);
+                    var activeMagicTs = mMatch ? parseInt(mMatch[1], 10) : (window._magicUrlStartedAt || 0);
+                    if (activeMagicTs && !window._magicPrefetchInFlight) {
+                        var nowSec = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === "function") ?
+                            OdyseeAPI.getServerNowSec() : Math.floor(Date.now() / 1000);
+                        var elapsed = nowSec - activeMagicTs;
+
+                        var claimId = window._activeClaim ? window._activeClaim.claim_id : null;
+                        var cachedUrl = (claimId && window.StreamResolver && typeof StreamResolver.getCachedMagicUrl === "function") ?
+                            StreamResolver.getCachedMagicUrl(claimId) : null;
+
+                        if (elapsed >= 300 && !cachedUrl) {
+                            window._magicPrefetchInFlight = true;
                             var rawU = n.dataset.rawUrl;
-                            if (rawU && window._activeClaim && window._activeClaim.claim_id) {
+                            if (rawU && claimId) {
                                 var nextMagicUrl = Utils.buildPlayableUrl(rawU, true);
-                                console.log("Watchdog: proactive pre-warm of next magic link at " + Math.round(elapsed) + "s -> " + nextMagicUrl);
+                                console.log("Watchdog: proactive pre-warm of next magic link at " + Math.round(elapsed) + "s (token age) -> " + nextMagicUrl);
                                 var preXhr = new XMLHttpRequest();
                                 preXhr.open("HEAD", nextMagicUrl, true);
                                 preXhr.timeout = 5000;
                                 preXhr.onreadystatechange = function () {
                                     if (preXhr.readyState === 4) {
+                                        window._magicPrefetchInFlight = false;
                                         console.log("Watchdog: proactive pre-warm status=" + preXhr.status);
                                         if (preXhr.status === 200 || preXhr.status === 308 || (preXhr.status >= 200 && preXhr.status < 400)) {
                                             console.log("Watchdog: proactive magic link pre-warmed successfully (" + preXhr.status + ")");
                                             if (window.StreamResolver && typeof StreamResolver.setCachedMagicUrl === "function") {
-                                                StreamResolver.setCachedMagicUrl(window._activeClaim.claim_id, nextMagicUrl);
+                                                StreamResolver.setCachedMagicUrl(claimId, nextMagicUrl);
                                             }
-                                            window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
-                                            window._magicPrefetchDone = false;
                                         } else {
                                             console.warn("Watchdog: proactive pre-warm returned status " + preXhr.status + ", will retry");
-                                            window._magicPrefetchDone = false;
                                         }
                                     }
                                 };
@@ -1634,6 +1648,9 @@ var Player = (function () {
 
         n.addEventListener("seeked", function () {
             if (c) c.style.display = "none";
+            if (!n.paused) {
+                startWatchdogDelayed();
+            }
         });
 
         n.addEventListener("playing", function () {
