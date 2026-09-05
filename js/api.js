@@ -38,26 +38,47 @@ var OdyseeAPI = (function () {
         // -------------------------------------------------------------------
 
         getSections: function (cb) {
+            // Display order matching odysee.com sidebar
+            var DISPLAY_ORDER = [
+                "PRIMARY_CONTENT", "UNIVERSE", "POP_CULTURE", "GAMING", "COMEDY",
+                "ART", "EDUCATION", "TECHNOLOGY", "LIFESTYLE", "SPOOKY", "MUSIC",
+                "SPORTS", "SPIRITUALITY", "FINANCE", "NEWS_AND_POLITICS"
+            ];
+
             fetchHomepage(function (err, data) {
                 if (err) return cb(err);
-                var out = [];
+
+                // Build a map of all valid sections (with channelIds)
+                var sectionMap = {};
                 for (var k in data) {
                     if (!data.hasOwnProperty(k)) continue;
                     var sec = data[k];
                     if (!sec || "object" != typeof sec) continue;
-                    if (k === "EXPLORABLE_CHANNEL" || k === "PRIMARY_CONTENT") continue;
+                    if (k === "EXPLORABLE_CHANNEL") continue;
                     var ids = sec.channelIds || [];
                     if (!ids.length) continue;
-                    out.push({
+                    sectionMap[k] = {
                         key: k,
                         label: sec.label || sec.name || k,
-                        channelLimit: sec.channelLimit || 3,
-                        sortOrder: "number" == typeof sec.sortOrder ? sec.sortOrder : 999
-                    });
+                        channelLimit: sec.channelLimit || 3
+                    };
                 }
-                out.sort(function (x, y) {
-                    return x.sortOrder - y.sortOrder;
-                });
+
+                // Output in hardcoded odysee.com display order
+                var out = [];
+                for (var i = 0; i < DISPLAY_ORDER.length; i++) {
+                    if (sectionMap[DISPLAY_ORDER[i]]) {
+                        out.push(sectionMap[DISPLAY_ORDER[i]]);
+                        delete sectionMap[DISPLAY_ORDER[i]];
+                    }
+                }
+                // Append any new sections not in DISPLAY_ORDER (future-proofing)
+                for (var extra in sectionMap) {
+                    if (sectionMap.hasOwnProperty(extra)) {
+                        out.push(sectionMap[extra]);
+                    }
+                }
+
                 console.log("OdyseeAPI: " + out.length + " category(ies)");
                 cb(null, out);
             });
