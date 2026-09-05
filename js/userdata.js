@@ -32,9 +32,13 @@ var UserData = (function () {
             if (token) data.auth_token = token;
 
             LbryIo.call("/reaction/list", { data: data }, function (err, resp) {
-                if (!err && resp && resp.data) {
-                    var my = (resp.data.my_reactions) ? resp.data.my_reactions[claimId] : null;
-                    callback(null, my);
+                if (!err && resp && resp.data && resp.data.my_reactions) {
+                    var my = resp.data.my_reactions[claimId];
+                    if (my) {
+                        if (my.like > 0) return callback(null, "like");
+                        if (my.dislike > 0) return callback(null, "dislike");
+                    }
+                    callback(null, null);
                 } else {
                     callback(err || new Error("Reaction list failed"));
                 }
@@ -42,16 +46,22 @@ var UserData = (function () {
         });
     }
 
-    function react(claimId, type, clearType, callback) {
+    function react(claimId, type, remove, callback) {
         LbryNet.ensureAuthToken(function (token) {
             var data = {
                 claim_ids: claimId,
                 type: type
             };
-            if (clearType) data.clear_types = clearType;
+            if (remove) data.remove = "true";
             if (token) data.auth_token = token;
 
+            console.log("UserData.react: claim=" + claimId + ", type=" + type + ", remove=" + (remove ? "true" : "false"));
             LbryIo.call("/reaction/react", { data: data }, function (err, resp) {
+                if (err) {
+                    console.error("UserData.react failed:", err.message || err);
+                } else {
+                    console.log("UserData.react successful for " + claimId);
+                }
                 if (callback) {
                     if (!err && resp) callback(null, resp);
                     else callback(err || new Error("React failed"));

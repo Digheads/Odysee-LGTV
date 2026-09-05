@@ -59,6 +59,14 @@ var Auth = (function () {
                 state.user = JSON.parse(u);
             }
 
+            var internalTok = localStorage.getItem("odysee_internal_auth_token");
+            if (internalTok) {
+                state.user.authToken = internalTok;
+                window.odyseeAuthToken = internalTok;
+            } else if (state.user && state.user.authToken) {
+                window.odyseeAuthToken = state.user.authToken;
+            }
+
             var s = localStorage.getItem("odysee_auth_settings");
             if (s) {
                 var parsedS = JSON.parse(s);
@@ -91,6 +99,10 @@ var Auth = (function () {
                 localStorage.removeItem("odysee_auth_refresh_token");
             }
 
+            if (state.user && state.user.authToken) {
+                localStorage.setItem("odysee_internal_auth_token", state.user.authToken);
+            }
+
             localStorage.setItem("odysee_auth_expires_at", String(state.expiresAt || 0));
             localStorage.setItem("odysee_auth_user", JSON.stringify(state.user || {}));
             localStorage.setItem("odysee_auth_settings", JSON.stringify(state.settings));
@@ -109,6 +121,8 @@ var Auth = (function () {
             localStorage.removeItem("odysee_auth_user");
             localStorage.removeItem("odysee_auth_memberships");
             localStorage.removeItem("odysee_auth_purchases");
+            localStorage.removeItem("odysee_internal_auth_token");
+            window.odyseeAuthToken = null;
         } catch (e) {
             console.error("Failed to clear auth from localStorage:", e);
         }
@@ -237,7 +251,11 @@ var Auth = (function () {
             if (!err && res && res.data) {
                 var d = res.data;
                 if (d.primary_email && !state.user.email) state.user.email = d.primary_email;
-                if (d.auth_token) window.odyseeAuthToken = d.auth_token;
+                if (d.auth_token) {
+                    state.user.authToken = d.auth_token;
+                    window.odyseeAuthToken = d.auth_token;
+                    savePersistedSession();
+                }
 
                 // Query channels & memberships
                 fetchUserChannel(function () {
@@ -341,6 +359,10 @@ var Auth = (function () {
 
         getAccessToken: function () {
             return state.accessToken;
+        },
+
+        getInternalAuthToken: function () {
+            return (state.user && state.user.authToken) || window.odyseeAuthToken || null;
         },
 
         getUser: function () {

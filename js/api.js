@@ -220,8 +220,8 @@ var OdyseeAPI = (function () {
         getMyReaction: function (claimId, cb) {
             return UserData.getMyReaction(claimId, cb);
         },
-        react: function (claimId, type, clearType, cb) {
-            return UserData.react(claimId, type, clearType, cb);
+        react: function (claimId, type, remove, cb) {
+            return UserData.react(claimId, type, remove, cb);
         },
         getViewCount: function (claimId, cb) {
             return UserData.getViewCount(claimId, cb);

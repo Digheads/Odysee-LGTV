@@ -892,22 +892,39 @@ body {
 }
 
 .btn-player-reaction.focused {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.25);
     border-color: #FFFFFF;
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
+    -webkit-transform: scale(1.08);
     transform: scale(1.08);
 }
 
 .btn-player-reaction.active-like {
-    color: #FF5A2B;
-    border-color: #FF5A2B;
-    background: rgba(255, 90, 43, 0.15);
+    color: #c91800;
+    border-color: #c91800;
+    background: rgba(201, 24, 0, 0.2);
+}
+
+.btn-player-reaction.active-like.focused {
+    background: rgba(201, 24, 0, 0.4);
+    border-color: #FFFFFF;
+    box-shadow: 0 0 16px rgba(201, 24, 0, 0.9);
+    -webkit-transform: scale(1.08);
+    transform: scale(1.08);
 }
 
 .btn-player-reaction.active-dislike {
-    color: #10B981;
-    border-color: #10B981;
-    background: rgba(16, 185, 129, 0.15);
+    color: #7bc45e;
+    border-color: #7bc45e;
+    background: rgba(123, 196, 94, 0.2);
+}
+
+.btn-player-reaction.active-dislike.focused {
+    background: rgba(123, 196, 94, 0.4);
+    border-color: #FFFFFF;
+    box-shadow: 0 0 16px rgba(123, 196, 94, 0.9);
+    -webkit-transform: scale(1.08);
+    transform: scale(1.08);
 }
 
 /* Resume Notice Toast */

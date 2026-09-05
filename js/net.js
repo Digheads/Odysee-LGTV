@@ -34,7 +34,9 @@ var LbryNet = (function () {
                                 Math.round(serverTimeOffsetMs / 1000) + "s (TV clock " +
                                 (serverTimeOffsetMs > 0 ? "slow" : "fast") + ")");
                         }
-                        if (d.auth_token) window.odyseeAuthToken = d.auth_token;
+                        if (d.auth_token && !window.odyseeAuthToken) {
+                            window.odyseeAuthToken = d.auth_token;
+                        }
                     } catch (err) {
                         console.error("Time sync parse error: " + err.message);
                     }
@@ -54,10 +56,10 @@ var LbryNet = (function () {
             return Math.floor((new Date().getTime() + serverTimeOffsetMs) / 1000);
         },
 
-        // Resolves user Bearer token if logged in, or anonymous auth_token.
+        // Resolves user internal auth_token if logged in, or anonymous auth_token.
         ensureAuthToken: function (cb) {
-            if (window.Auth && typeof Auth.getAccessToken === "function" && Auth.getAccessToken()) {
-                return cb(Auth.getAccessToken());
+            if (window.Auth && typeof Auth.getInternalAuthToken === "function" && Auth.getInternalAuthToken()) {
+                return cb(Auth.getInternalAuthToken());
             }
             if (window.odyseeAuthToken) {
                 return cb(window.odyseeAuthToken);

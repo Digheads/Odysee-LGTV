@@ -295,7 +295,7 @@ var Player = (function () {
                     if (wasLiked) {
                         btnLike.classList.remove("active-like");
                         if (countLike) countLike.textContent = Math.max(0, curL - 1);
-                        OdyseeAPI.react(claimId, "like", "like");
+                        OdyseeAPI.react(claimId, "like", true);
                     } else {
                         btnLike.classList.add("active-like");
                         if (countLike) countLike.textContent = curL + 1;
@@ -303,7 +303,7 @@ var Player = (function () {
                             btnDislike.classList.remove("active-dislike");
                             if (countDislike) countDislike.textContent = Math.max(0, curD - 1);
                         }
-                        OdyseeAPI.react(claimId, "like", "dislike");
+                        OdyseeAPI.react(claimId, "like", false);
                     }
                 };
             }
@@ -319,7 +319,7 @@ var Player = (function () {
                     if (wasDisliked) {
                         btnDislike.classList.remove("active-dislike");
                         if (countDislike) countDislike.textContent = Math.max(0, curD - 1);
-                        OdyseeAPI.react(claimId, "dislike", "dislike");
+                        OdyseeAPI.react(claimId, "dislike", true);
                     } else {
                         btnDislike.classList.add("active-dislike");
                         if (countDislike) countDislike.textContent = curD + 1;
@@ -327,7 +327,7 @@ var Player = (function () {
                             btnLike.classList.remove("active-like");
                             if (countLike) countLike.textContent = Math.max(0, curL - 1);
                         }
-                        OdyseeAPI.react(claimId, "dislike", "like");
+                        OdyseeAPI.react(claimId, "dislike", false);
                     }
                 };
             }
@@ -336,6 +336,16 @@ var Player = (function () {
         function renderReactions(likes, dislikes) {
             if (!metaReactionsEl) return;
             if (isAuth) {
+                var existingLike = document.getElementById("btn-like");
+                var existingDislike = document.getElementById("btn-dislike");
+                if (existingLike && existingDislike) {
+                    var countLikeEl = document.getElementById("like-count");
+                    var countDislikeEl = document.getElementById("dislike-count");
+                    if (countLikeEl) countLikeEl.textContent = likes || 0;
+                    if (countDislikeEl) countDislikeEl.textContent = dislikes || 0;
+                    return;
+                }
+
                 metaReactionsEl.innerHTML =
                     '<button class="focusable btn-player-reaction" id="btn-like" title="Like">' +
                     likeSvg + '<span id="like-count">' + (likes || 0) + '</span>' +
@@ -350,6 +360,8 @@ var Player = (function () {
                         var bLike = document.getElementById("btn-like");
                         var bDislike = document.getElementById("btn-dislike");
                         if (!bLike || !bDislike) return;
+                        bLike.classList.remove("active-like");
+                        bDislike.classList.remove("active-dislike");
                         if (myRx === "like") {
                             bLike.classList.add("active-like");
                         } else if (myRx === "dislike") {
@@ -365,9 +377,10 @@ var Player = (function () {
             }
         }
 
-        if (e._cached_reactions) {
-            renderReactions(e._cached_reactions.like, e._cached_reactions.dislike);
-        } else if (e.claim_id) {
+        // Render reaction buttons immediately so they are available right away
+        renderReactions(e._cached_reactions ? e._cached_reactions.like : 0, e._cached_reactions ? e._cached_reactions.dislike : 0);
+
+        if (e.claim_id) {
             OdyseeAPI.getReactions(e.claim_id, function (err, reactions) {
                 if (!err && reactions) {
                     e._cached_reactions = reactions;
@@ -723,6 +736,73 @@ var Player = (function () {
             if (!n.paused) {
                 if (l) l.classList.add("fade-out");
                 if (o) o.classList.add("fade-out");
+                setPlayerFocus(i);
+            }
+        }
+
+        function getPlayerFocusedButton() {
+            var el = document.querySelector(".btn-player-reaction.focused, .btn-play-pause.focused");
+            return el || i;
+        }
+
+        function setPlayerFocus(targetEl) {
+            if (!targetEl) return;
+            var prevFocused = document.querySelectorAll("#player-container .focused");
+            for (var pf = 0; pf < prevFocused.length; pf++) {
+                prevFocused[pf].classList.remove("focused");
+            }
+            targetEl.classList.add("focused");
+            if (window.SpatialNavigation && typeof SpatialNavigation.focusNode === "function") {
+                SpatialNavigation.focusNode(targetEl);
+            }
+        }
+
+        function doSeek(direction) {
+            try {
+                var currentTarget = (window._pendingSeekTime !== undefined) ? window._pendingSeekTime : n.currentTime;
+                var maxDuration = isNaN(n.duration) ? currentTarget + 10 + 100 : n.duration;
+                var newTime = currentTarget + direction;
+                newTime = Math.max(0, Math.min(maxDuration, newTime));
+
+                if (window._pendingSeekTime === undefined) {
+                    window._userAction = true;
+                    window._wasPlayingBeforeSeek = !n.paused;
+                    if (!n.paused) n.pause();
+                }
+
+                window._pendingSeekTime = newTime;
+
+                var dur = n.duration;
+                var dFallback = parseFloat(n.getAttribute("data-duration")) || 0;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = dFallback;
+                if (dur > 0) {
+                    if (a) a.style.width = (newTime / dur * 100) + "%";
+                    if (r) r.textContent = Utils.formatDuration(newTime, dur) + " / " + Utils.formatDuration(dur, dur);
+                }
+
+                if (window._seekDebounceTimer) clearTimeout(window._seekDebounceTimer);
+                window._seekDebounceTimer = setTimeout(function () {
+                    try {
+                        if (c) c.style.display = "block";
+                        var seekTarget = window._pendingSeekTime;
+                        window._pendingSeekTime = undefined;
+
+                        if (window._wasPlayingBeforeSeek) {
+                            var onSeeked = function () {
+                                n.removeEventListener("seeked", onSeeked);
+                                window._userAction = true;
+                                n.play();
+                                window._wasPlayingBeforeSeek = false;
+                            };
+                            n.addEventListener("seeked", onSeeked);
+                        }
+                        n.currentTime = seekTarget;
+                    } catch (err) {
+                        console.error("Delayed seek failed: " + err);
+                    }
+                }, 400);
+            } catch (err) {
+                console.error("Seek calculation failed: " + err);
             }
         }
 
@@ -733,65 +813,89 @@ var Player = (function () {
                 showControls();
                 var keyCode = e.keyCode;
 
-                if (keyCode === 13 && wasHidden) {
-                    e.stopPropagation();
+                if (wasHidden) {
                     e.preventDefault();
+                    setPlayerFocus(i);
                     return;
                 }
 
-                if (415 === keyCode || 19 === keyCode || 179 === keyCode || 13 === keyCode) {
-                    if ((13 === keyCode && "BUTTON" !== document.activeElement.tagName) || 13 !== keyCode) {
-                        if (i) i.click();
+                var btnLike = document.getElementById("btn-like");
+                var btnDislike = document.getElementById("btn-dislike");
+                var focusedBtn = getPlayerFocusedButton();
+
+                // 1. Dedicated Media Play / Pause keys
+                if (415 === keyCode || 19 === keyCode || 179 === keyCode) {
+                    e.preventDefault();
+                    if (i) i.click();
+                    return;
+                }
+
+                // 2. Dedicated Media Rewind / Fast Forward keys
+                if (412 === keyCode || 417 === keyCode) {
+                    e.preventDefault();
+                    doSeek(412 === keyCode ? -10 : 10);
+                    return;
+                }
+
+                // 3. OK / Enter key (13)
+                if (13 === keyCode) {
+                    e.preventDefault();
+                    if (focusedBtn) {
+                        focusedBtn.click();
+                    } else if (i) {
+                        i.click();
                     }
-                } else if (412 === keyCode || 37 === keyCode || 417 === keyCode || 39 === keyCode) {
-                    try {
-                        var currentTarget = (window._pendingSeekTime !== undefined) ? window._pendingSeekTime : n.currentTime;
-                        var direction = (412 === keyCode || 37 === keyCode) ? -10 : 10;
-                        var maxDuration = isNaN(n.duration) ? currentTarget + 10 + 100 : n.duration;
-                        var newTime = currentTarget + direction;
-                        newTime = Math.max(0, Math.min(maxDuration, newTime));
+                    return;
+                }
 
-                        if (window._pendingSeekTime === undefined) {
-                            window._userAction = true;
-                            window._wasPlayingBeforeSeek = !n.paused;
-                            if (!n.paused) n.pause();
-                        }
-
-                        window._pendingSeekTime = newTime;
-
-                        var dur = n.duration;
-                        var dFallback = parseFloat(n.getAttribute("data-duration")) || 0;
-                        if (!dur || isNaN(dur) || dur === Infinity) dur = dFallback;
-                        if (dur > 0) {
-                            if (a) a.style.width = (newTime / dur * 100) + "%";
-                            if (r) r.textContent = Utils.formatDuration(newTime, dur) + " / " + Utils.formatDuration(dur, dur);
-                        }
-
-                        if (window._seekDebounceTimer) clearTimeout(window._seekDebounceTimer);
-                        window._seekDebounceTimer = setTimeout(function () {
-                            try {
-                                if (c) c.style.display = "block";
-                                var seekTarget = window._pendingSeekTime;
-                                window._pendingSeekTime = undefined;
-
-                                if (window._wasPlayingBeforeSeek) {
-                                    var onSeeked = function () {
-                                        n.removeEventListener("seeked", onSeeked);
-                                        window._userAction = true;
-                                        n.play();
-                                        window._wasPlayingBeforeSeek = false;
-                                    };
-                                    n.addEventListener("seeked", onSeeked);
-                                }
-                                n.currentTime = seekTarget;
-                            } catch (err) {
-                                console.error("Delayed seek failed: " + err);
-                            }
-                        }, 400);
-                    } catch (err) {
-                        console.error("Seek calculation failed: " + err);
+                // 4. UP Arrow (38)
+                if (38 === keyCode) {
+                    e.preventDefault();
+                    if (focusedBtn === i && btnLike) {
+                        setPlayerFocus(btnLike);
                     }
-                } else if (413 === keyCode) {
+                    return;
+                }
+
+                // 5. DOWN Arrow (40)
+                if (40 === keyCode) {
+                    e.preventDefault();
+                    if (focusedBtn === btnLike || focusedBtn === btnDislike) {
+                        setPlayerFocus(i);
+                    }
+                    return;
+                }
+
+                // 6. LEFT Arrow (37)
+                if (37 === keyCode) {
+                    e.preventDefault();
+                    if (focusedBtn === btnDislike && btnLike) {
+                        setPlayerFocus(btnLike);
+                    } else if (focusedBtn === btnLike) {
+                        // Leftmost reaction button, stay on it
+                    } else {
+                        // On play-pause or default: seek backward 10s
+                        doSeek(-10);
+                    }
+                    return;
+                }
+
+                // 7. RIGHT Arrow (39)
+                if (39 === keyCode) {
+                    e.preventDefault();
+                    if (focusedBtn === btnLike && btnDislike) {
+                        setPlayerFocus(btnDislike);
+                    } else if (focusedBtn === btnDislike) {
+                        // Rightmost reaction button, stay on it
+                    } else {
+                        // On play-pause or default: seek forward 10s
+                        doSeek(10);
+                    }
+                    return;
+                }
+
+                // 8. Stop / Back keys
+                if (413 === keyCode) {
                     e.preventDefault();
                     history.back();
                 } else if (461 !== keyCode && 8 !== keyCode && 27 !== keyCode && 10009 !== keyCode) {
