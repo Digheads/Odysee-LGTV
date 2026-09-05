@@ -163,10 +163,27 @@
                 </div>
                 <div class="seeker-bottom-row">
                     <div id="meta-date" class="video-meta meta-left"></div>
-                    <div id="meta-views" class="video-meta meta-right"></div>
+                    <div class="video-meta meta-right">
+                        <span id="meta-views"></span>
+                        <button class="focusable btn-player-comments" id="btn-comments" title="Comments">
+                            <span id="comments-icon" class="comments-icon"></span>
+                            <span id="comments-count">0</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="controls-row">
                     <button class="focusable btn-player btn-play-pause" id="btn-play-pause">❚❚</button>
+                </div>
+            </div>
+
+            <!-- Comments Sidebar Overlay (Right 1/3 of screen) -->
+            <div id="player-comments-sidebar" class="player-comments-sidebar hidden">
+                <div class="comments-sidebar-header">
+                    <div id="comments-sidebar-title" class="comments-sidebar-title">Comments</div>
+                    <div class="comments-sidebar-hint">Back: Close</div>
+                </div>
+                <div id="comments-list" class="comments-list focusable" tabindex="0">
+                    <div class="comments-loading">Loading comments...</div>
                 </div>
             </div>
         </div>
@@ -191,6 +208,7 @@
     <script src="js/claim-filter.js"></script>
     <script src="js/stream.js"></script>
     <script src="js/userdata.js"></script>
+    <script src="js/comments.js"></script>
     <script src="js/api.js"></script>
     <script src="js/navigation.js"></script>
     <script src="js/feed.js"></script>

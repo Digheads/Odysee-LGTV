@@ -94,7 +94,7 @@ var Feed = (function () {
 
     function renderProfileView(t) {
         var user = (window.Auth && Auth.getUser) ? Auth.getUser() : {};
-        var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : { hideMature: true, hideMembersOnly: false, hideYoutube: false };
+        var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : { hideMature: true, hideShorts: true, hideYoutube: false };
 
         var rawAvatar = (window.Auth && Auth.getAvatarUrl) ? Auth.getAvatarUrl() : (user.avatarUrl || "icons/icon.png");
         var avatarSrc = (window.Utils && Utils.thumbUrl) ? Utils.thumbUrl(rawAvatar, 160) : rawAvatar;
@@ -125,7 +125,7 @@ var Feed = (function () {
             '<div class="setting-row">' +
             '<div class="setting-info">' +
             '<div class="setting-name">Hide mature content</div>' +
-            '<div class="setting-desc">Hide adult (18+) content from results</div>' +
+            '<div class="setting-desc">You will not see adult (18+) content.</div>' +
             '</div>' +
             '<button class="focusable btn-setting-toggle ' + (settings.hideMature ? 'toggle-active' : '') + '" id="toggle-mature">' +
             (settings.hideMature ? 'ON' : 'OFF') +
@@ -134,18 +134,18 @@ var Feed = (function () {
 
             '<div class="setting-row">' +
             '<div class="setting-info">' +
-            '<div class="setting-name">Hide members-only content</div>' +
-            '<div class="setting-desc">Hide channel members-only content</div>' +
+            '<div class="setting-name">Hide short content</div>' +
+            '<div class="setting-desc">You will not see vertical videos less than 3 minutes.</div>' +
             '</div>' +
-            '<button class="focusable btn-setting-toggle ' + (settings.hideMembersOnly ? 'toggle-active' : '') + '" id="toggle-members">' +
-            (settings.hideMembersOnly ? 'ON' : 'OFF') +
+            '<button class="focusable btn-setting-toggle ' + (settings.hideShorts ? 'toggle-active' : '') + '" id="toggle-shorts">' +
+            (settings.hideShorts ? 'ON' : 'OFF') +
             '</button>' +
             '</div>' +
 
             '<div class="setting-row">' +
             '<div class="setting-info">' +
             '<div class="setting-name">Hide synced YouTube videos</div>' +
-            '<div class="setting-desc">Hide videos synced from YouTube</div>' +
+            '<div class="setting-desc">You will not see videos that are synced from YouTube.</div>' +
             '</div>' +
             '<button class="focusable btn-setting-toggle ' + (settings.hideYoutube ? 'toggle-active' : '') + '" id="toggle-youtube">' +
             (settings.hideYoutube ? 'ON' : 'OFF') +
@@ -188,7 +188,7 @@ var Feed = (function () {
         }
 
         setupToggle("toggle-mature", "hideMature");
-        setupToggle("toggle-members", "hideMembersOnly");
+        setupToggle("toggle-shorts", "hideShorts");
         setupToggle("toggle-youtube", "hideYoutube");
 
         setTimeout(function () {
@@ -258,14 +258,16 @@ var Feed = (function () {
         function r(err, res) {
             isLoading = false;
             n.style.display = "none";
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") {
-                SpatialNavigation.unlock();
-            }
             if (err) {
                 var msg = err.message || ("string" == typeof err ? err : JSON.stringify(err));
                 t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. ' + msg + "</div>";
                 console.error(err);
-                SpatialNavigation.refresh();
+                if (window.SpatialNavigation) {
+                    SpatialNavigation.refresh();
+                    var activeMenu = document.querySelector(".nav-item.active");
+                    if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                    SpatialNavigation.unlock();
+                }
                 return;
             }
             if (res && res.items) {
@@ -277,9 +279,9 @@ var Feed = (function () {
             } else {
                 hasMore = false;
             }
-            SpatialNavigation.refresh();
-            if (currentPage === 1) {
-                setTimeout(function () {
+            if (window.SpatialNavigation) {
+                SpatialNavigation.refresh();
+                if (currentPage === 1) {
                     var firstVideo = t.querySelector(".video-card");
                     if (firstVideo) {
                         SpatialNavigation.focusNode(firstVideo);
@@ -288,7 +290,8 @@ var Feed = (function () {
                         if (activeMenu) SpatialNavigation.focusNode(activeMenu);
                     }
                     isAppStartup = false;
-                }, 100);
+                }
+                SpatialNavigation.unlock();
             }
         }
 

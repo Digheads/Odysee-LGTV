@@ -8,7 +8,27 @@ var SpatialNavigation = function () {
         var a = document.querySelectorAll(".focusable");
         e = [];
         for (var c = 0; c < a.length; c++) null !== a[c].offsetParent && e.push(a[c]);
-        (t >= e.length || t >= 0 && -1 === e.indexOf(lastFocusedEl)) && e.length > 0 && n(0)
+        if (!isLocked) {
+            (t >= e.length || (t >= 0 && -1 === e.indexOf(lastFocusedEl))) && e.length > 0 && n(0);
+        } else {
+            if (lastFocusedEl && -1 === e.indexOf(lastFocusedEl)) {
+                if (lastFocusedEl.classList) lastFocusedEl.classList.remove("focused");
+                lastFocusedEl = null;
+                t = -1;
+            }
+        }
+    }
+
+    function clearFocus() {
+        if (lastFocusedEl && lastFocusedEl.classList) {
+            lastFocusedEl.classList.remove("focused");
+        }
+        lastFocusedEl = null;
+        var allFocused = document.querySelectorAll(".focused");
+        for (var f = 0; f < allFocused.length; f++) {
+            allFocused[f].classList.remove("focused");
+        }
+        t = -1;
     }
 
     function n(a) {
@@ -233,6 +253,7 @@ var SpatialNavigation = function () {
         },
         isLocked: function() {
             return isLocked;
-        }
+        },
+        clearFocus: clearFocus
     }
 }();

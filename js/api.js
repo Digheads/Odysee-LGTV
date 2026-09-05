@@ -63,7 +63,33 @@ var OdyseeAPI = (function () {
             });
         },
 
+        getBaseNotTags: function () {
+            var settings = (window.Auth && typeof Auth.getSettings === "function") ?
+                Auth.getSettings() : { hideMature: true, hideShorts: true, hideYoutube: false };
+
+            var notTags = ["c:unlisted", "c:scheduled:show", "c:scheduled:hide"];
+
+            // Exclude members-only/rentals at API level ONLY if user has no memberships/purchases
+            var hasMemberships = window.Auth && typeof Auth.hasAnyMembershipsOrPurchases === "function" && Auth.hasAnyMembershipsOrPurchases();
+            if (!hasMemberships) {
+                notTags.push("c:members-only", "c:rental", "c:purchase");
+            }
+
+            // Mature content tags
+            if (settings.hideMature) {
+                notTags.push("mature", "c:mature", "nsfw", "c:nsfw", "porn", "xxx", "hentai", "sex", "18+", "adult");
+            }
+
+            // Synced YouTube content tags
+            if (settings.hideYoutube) {
+                notTags.push("youtube-sync", "c:you-tube", "you-tube", "c:youtube");
+            }
+
+            return notTags;
+        },
+
         getCategory: function (key, t, page) {
+            var self = this;
             fetchHomepage(function (err, data) {
                 if (err) return t(err);
                 var sec = data[key];
@@ -76,8 +102,7 @@ var OdyseeAPI = (function () {
                     page: page || 1,
                     has_no_source: false,
                     fee_amount: "<=0",
-                    duration: ">=60",
-                    not_tags: ["c:members-only", "c:unlisted", "c:rental", "c:purchase", "c:scheduled:show", "c:scheduled:hide"],
+                    not_tags: self.getBaseNotTags(),
                     limit_claims_per_channel: parseInt(sec.channelLimit || 3, 10),
                     order_by: ["trending_group", "trending_mixed"]
                 }, ClaimFilter.filterPlayable(t));
@@ -92,18 +117,22 @@ var OdyseeAPI = (function () {
                 page: page || 1,
                 has_no_source: false,
                 fee_amount: "<=0",
-                duration: ">=60",
-                not_tags: ["c:members-only", "c:unlisted", "c:rental", "c:purchase", "c:scheduled:show", "c:scheduled:hide"],
+                not_tags: this.getBaseNotTags(),
                 order_by: ["trending_group", "trending_mixed"]
             }, ClaimFilter.filterPlayable(t));
         },
 
         search: function (t, r, page) {
+            var self = this;
             var p = page || 1;
             console.log("OdyseeAPI: Searching lighthouse for: " + t);
+            var settings = (window.Auth && typeof Auth.getSettings === "function") ?
+                Auth.getSettings() : { hideMature: true, hideShorts: true, hideYoutube: false };
+
             var xhr = new XMLHttpRequest();
             var url = "https://lighthouse.odysee.tv/search?s=" + encodeURIComponent(t) +
-                "&size=20&from=" + ((p - 1) * 20) + "&claimType=file&mediaType=video&free_only=true";
+                "&size=20&from=" + ((p - 1) * 20) + "&claimType=file&mediaType=video&free_only=true" +
+                (settings.hideMature ? "&nsfw=false" : "");
 
             xhr.open("GET", url, true);
             xhr.onreadystatechange = function () {
@@ -121,8 +150,7 @@ var OdyseeAPI = (function () {
                                     page_size: 20,
                                     has_no_source: false,
                                     fee_amount: "<=0",
-                                    duration: ">=60",
-                                    not_tags: ["c:members-only", "c:unlisted", "c:rental", "c:purchase", "c:scheduled:show", "c:scheduled:hide"]
+                                    not_tags: self.getBaseNotTags()
                                 }, ClaimFilter.filterPlayable(function (e, t) {
                                     if (e) return r(e);
                                     if (t && t.items) {
@@ -203,6 +231,12 @@ var OdyseeAPI = (function () {
         getStreamingSourceUrl: function (claim, cb) {
             return StreamResolver.getStreamingSourceUrl(claim, cb);
         },
+        getCachedMagicUrl: function (claimId) {
+            return StreamResolver.getCachedMagicUrl(claimId);
+        },
+        setCachedMagicUrl: function (claimId, url, createdAtSec) {
+            return StreamResolver.setCachedMagicUrl(claimId, url, createdAtSec);
+        },
         reportWatchmanPlayback: function (url, duration, pos, relPos, rebufCount, rebufDur) {
             return StreamResolver.reportWatchmanPlayback(url, duration, pos, relPos, rebufCount, rebufDur);
         },
@@ -219,6 +253,9 @@ var OdyseeAPI = (function () {
         },
         getMyReaction: function (claimId, cb) {
             return UserData.getMyReaction(claimId, cb);
+        },
+        getCachedReactions: function (claimId) {
+            return UserData.getCachedReactions ? UserData.getCachedReactions(claimId) : null;
         },
         react: function (claimId, type, remove, cb) {
             return UserData.react(claimId, type, remove, cb);

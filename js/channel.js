@@ -21,14 +21,18 @@ var Channel = (function () {
         var topHeader = document.querySelector(".top-header");
         if (topHeader) topHeader.style.display = "block";
 
-        SpatialNavigation.refresh();
-        if (!dontRestoreFocus) {
-            if (window.lastFocusedCard) {
-                SpatialNavigation.focusNode(window.lastFocusedCard);
-            } else {
-                var firstCard = document.querySelector(".video-card");
-                if (firstCard) SpatialNavigation.focusNode(firstCard);
+        if (window.SpatialNavigation) {
+            SpatialNavigation.lock();
+            SpatialNavigation.refresh();
+            if (!dontRestoreFocus) {
+                if (window.lastFocusedCard) {
+                    SpatialNavigation.focusNode(window.lastFocusedCard);
+                } else {
+                    var firstCard = document.querySelector(".video-card");
+                    if (firstCard) SpatialNavigation.focusNode(firstCard);
+                }
             }
+            SpatialNavigation.unlock();
         }
     }
 
@@ -77,13 +81,24 @@ var Channel = (function () {
         if (grid) grid.innerHTML = "";
         var cpLoading = document.getElementById("cp-loading");
         if (cpLoading) cpLoading.style.display = "block";
-        SpatialNavigation.focusNode(document.getElementById("channel-page"));
+        if (window.SpatialNavigation) {
+            SpatialNavigation.lock();
+            if (typeof SpatialNavigation.clearFocus === "function") {
+                SpatialNavigation.clearFocus();
+            }
+        }
 
         OdyseeAPI.searchChannelVideos(channelClaim.claim_id, function (err, res) {
             window.channelPageIsLoading = false;
             if (cpLoading) cpLoading.style.display = "none";
             if (err) {
                 if (grid) grid.innerHTML = '<div style="color:white; font-size:24px; text-align:center; padding: 20px;">Error loading channel videos.</div>';
+                if (window.SpatialNavigation) {
+                    SpatialNavigation.refresh();
+                    var header = document.getElementById("cp-header");
+                    if (header) SpatialNavigation.focusNode(header);
+                    SpatialNavigation.unlock();
+                }
                 return;
             }
             if (res && res.items && res.items.length > 0) {
@@ -99,14 +114,21 @@ var Channel = (function () {
                     }
                     if (card && grid) grid.appendChild(card);
                 }
-                SpatialNavigation.refresh();
-                setTimeout(function () {
+                if (window.SpatialNavigation) {
+                    SpatialNavigation.refresh();
                     var header = document.getElementById("cp-header");
                     if (header) SpatialNavigation.focusNode(header);
-                }, 100);
+                    SpatialNavigation.unlock();
+                }
             } else {
                 window.channelPageHasMore = false;
                 if (grid) grid.innerHTML = '<div style="color:white; font-size:24px; text-align:center; padding: 20px;">No videos found.</div>';
+                if (window.SpatialNavigation) {
+                    SpatialNavigation.refresh();
+                    var header = document.getElementById("cp-header");
+                    if (header) SpatialNavigation.focusNode(header);
+                    SpatialNavigation.unlock();
+                }
             }
         }, 1);
     }

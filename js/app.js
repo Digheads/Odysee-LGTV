@@ -45,9 +45,8 @@ document.addEventListener("DOMContentLoaded", function () {
     SpatialNavigation.init();
     SpatialNavigation.lock();
 
-    var initialTrending = document.querySelector(".nav-item[data-id='nav-trending']");
-    if (initialTrending) {
-        SpatialNavigation.focusNode(initialTrending);
+    if (SpatialNavigation.clearFocus) {
+        SpatialNavigation.clearFocus();
     }
 
     // Safety fallback: unlock navigation after 15s in case network stalls
@@ -55,6 +54,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (SpatialNavigation.isLocked && SpatialNavigation.isLocked()) {
             console.warn("Safety fallback: unlocking SpatialNavigation");
             SpatialNavigation.unlock();
+            SpatialNavigation.refresh();
+            var focused = document.querySelector(".focused");
+            if (!focused) {
+                var activeMenu = document.querySelector(".nav-item.active");
+                if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+            }
         }
     }, 15000);
 
@@ -67,10 +72,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (err) console.error("Failed to load categories: " + err.message);
                     Navigation.buildNav(sections || []);
                     SpatialNavigation.refresh();
-                    var trendingItem = document.querySelector(".nav-item[data-id='nav-trending']");
-                    if (trendingItem) {
-                        SpatialNavigation.focusNode(trendingItem);
-                    }
                     Feed.loadPage("nav-trending");
                 });
             }
@@ -113,7 +114,11 @@ document.addEventListener("DOMContentLoaded", function () {
     window.addEventListener("popstate", function (e) {
         var playerEl = document.getElementById("player-container");
         if (playerEl && !playerEl.classList.contains("hidden")) {
-            Player.close();
+            if (window.Player && typeof Player.isCommentsOpen === "function" && Player.isCommentsOpen()) {
+                Player.closeComments();
+            } else {
+                Player.close();
+            }
         } else if (window.isChannelPageOpen) {
             Channel.close();
         }

@@ -27,7 +27,7 @@ var Auth = (function () {
         },
         settings: {
             hideMature: true,
-            hideMembersOnly: false,
+            hideShorts: true,
             hideYoutube: false
         },
         memberships: [], // Array of channel claim IDs
@@ -71,7 +71,7 @@ var Auth = (function () {
             if (s) {
                 var parsedS = JSON.parse(s);
                 state.settings.hideMature = parsedS.hideMature !== undefined ? parsedS.hideMature : true;
-                state.settings.hideMembersOnly = parsedS.hideMembersOnly !== undefined ? parsedS.hideMembersOnly : false;
+                state.settings.hideShorts = parsedS.hideShorts !== undefined ? parsedS.hideShorts : true;
                 state.settings.hideYoutube = parsedS.hideYoutube !== undefined ? parsedS.hideYoutube : false;
             }
 
@@ -121,6 +121,7 @@ var Auth = (function () {
             localStorage.removeItem("odysee_auth_user");
             localStorage.removeItem("odysee_auth_memberships");
             localStorage.removeItem("odysee_auth_purchases");
+            localStorage.removeItem("odysee_auth_settings");
             localStorage.removeItem("odysee_internal_auth_token");
             window.odyseeAuthToken = null;
         } catch (e) {
@@ -137,6 +138,11 @@ var Auth = (function () {
             channelClaimId: "",
             avatarUrl: "",
             followers: 0
+        };
+        state.settings = {
+            hideMature: true,
+            hideShorts: true,
+            hideYoutube: false
         };
         state.memberships = [];
         state.purchases = [];
@@ -387,7 +393,23 @@ var Auth = (function () {
         },
 
         getSettings: function () {
+            if (!isLoggedIn()) {
+                return {
+                    hideMature: true,
+                    hideShorts: true,
+                    hideYoutube: false
+                };
+            }
             return state.settings;
+        },
+
+        hasAnyMembershipsOrPurchases: function () {
+            return !!(
+                (state.memberships && state.memberships.length > 0) ||
+                (state.purchases && state.purchases.length > 0) ||
+                (state.user && state.user.channelClaimIds && state.user.channelClaimIds.length > 0) ||
+                (state.user && state.user.channelClaimId)
+            );
         },
 
         updateSetting: function (key, val) {

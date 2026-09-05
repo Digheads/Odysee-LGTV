@@ -9,16 +9,38 @@ var UserData = (function () {
     // Reactions (Like / Dislike)
     // -----------------------------------------------------------------------
 
+    var reactionCache = {};
+
+    function getCachedReactions(claimId) {
+        return reactionCache[claimId] || null;
+    }
+
     function getReactions(claimId, callback) {
         LbryNet.ensureAuthToken(function (token) {
             var data = { claim_ids: claimId };
             if (token) data.auth_token = token;
 
             LbryIo.call("/reaction/list", { data: data }, function (err, resp) {
-                if (!err && resp && resp.data && resp.data.others_reactions && resp.data.others_reactions[claimId]) {
-                    callback(null, resp.data.others_reactions[claimId]);
+                if (!err && resp && resp.data) {
+                    var others = (resp.data.others_reactions && resp.data.others_reactions[claimId]) || { like: 0, dislike: 0 };
+                    var my = (resp.data.my_reactions && resp.data.my_reactions[claimId]) || { like: 0, dislike: 0 };
+                    var totalLikes = (others.like || 0) + (my.like || 0);
+                    var totalDislikes = (others.dislike || 0) + (my.dislike || 0);
+                    var myRx = null;
+                    if (my.like > 0) myRx = "like";
+                    else if (my.dislike > 0) myRx = "dislike";
+
+                    var entry = {
+                        like: totalLikes,
+                        dislike: totalDislikes,
+                        myReaction: myRx
+                    };
+                    reactionCache[claimId] = entry;
+                    callback(null, entry);
                 } else if (!err) {
-                    callback(null, { like: 0, dislike: 0 });
+                    var defaultEntry = { like: 0, dislike: 0, myReaction: null };
+                    reactionCache[claimId] = defaultEntry;
+                    callback(null, defaultEntry);
                 } else {
                     callback(err || new Error("Reaction API failed"));
                 }
@@ -27,26 +49,46 @@ var UserData = (function () {
     }
 
     function getMyReaction(claimId, callback) {
-        LbryNet.ensureAuthToken(function (token) {
-            var data = { claim_ids: claimId };
-            if (token) data.auth_token = token;
-
-            LbryIo.call("/reaction/list", { data: data }, function (err, resp) {
-                if (!err && resp && resp.data && resp.data.my_reactions) {
-                    var my = resp.data.my_reactions[claimId];
-                    if (my) {
-                        if (my.like > 0) return callback(null, "like");
-                        if (my.dislike > 0) return callback(null, "dislike");
-                    }
-                    callback(null, null);
-                } else {
-                    callback(err || new Error("Reaction list failed"));
-                }
-            });
+        if (reactionCache[claimId] && reactionCache[claimId].myReaction !== undefined) {
+            return callback(null, reactionCache[claimId].myReaction);
+        }
+        getReactions(claimId, function (err, res) {
+            if (err) return callback(err);
+            callback(null, res ? res.myReaction : null);
         });
     }
 
     function react(claimId, type, remove, callback) {
+        var cached = reactionCache[claimId];
+        if (!cached) {
+            cached = { like: 0, dislike: 0, myReaction: null };
+            reactionCache[claimId] = cached;
+        }
+
+        if (type === "like") {
+            if (remove) {
+                cached.like = Math.max(0, cached.like - 1);
+                cached.myReaction = null;
+            } else {
+                cached.like = cached.like + 1;
+                if (cached.myReaction === "dislike") {
+                    cached.dislike = Math.max(0, cached.dislike - 1);
+                }
+                cached.myReaction = "like";
+            }
+        } else if (type === "dislike") {
+            if (remove) {
+                cached.dislike = Math.max(0, cached.dislike - 1);
+                cached.myReaction = null;
+            } else {
+                cached.dislike = cached.dislike + 1;
+                if (cached.myReaction === "like") {
+                    cached.like = Math.max(0, cached.like - 1);
+                }
+                cached.myReaction = "dislike";
+            }
+        }
+
         LbryNet.ensureAuthToken(function (token) {
             var data = {
                 claim_ids: claimId,
@@ -411,6 +453,7 @@ var UserData = (function () {
     return {
         getReactions: getReactions,
         getMyReaction: getMyReaction,
+        getCachedReactions: getCachedReactions,
         react: react,
         getViewCount: getViewCount,
         saveViewProgress: saveViewProgress,

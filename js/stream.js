@@ -8,6 +8,31 @@ var StreamResolver = (function () {
     // Default is false (/v6/ .mp4) for webOS 2.0 pipeline compatibility.
     var USE_V4_HLS = false;
 
+    // Cache for pre-warmed playable URLs with magic timestamp per claimId
+    // magic=<unix_ts> is valid for 300 seconds on player.odycdn.com
+    var magicCache = {};
+
+    function getCachedMagicUrl(claimId) {
+        if (!claimId || !magicCache[claimId]) return null;
+        var entry = magicCache[claimId];
+        var nowSec = Math.floor(Date.now() / 1000);
+        // Ensure at least 15 seconds remain before 285s window expires
+        if (entry.expiresAt && nowSec < entry.expiresAt - 15) {
+            return entry.url;
+        }
+        return null;
+    }
+
+    function setCachedMagicUrl(claimId, url, createdAtSec) {
+        if (!claimId || !url) return;
+        var nowSec = createdAtSec || Math.floor(Date.now() / 1000);
+        magicCache[claimId] = {
+            url: url,
+            createdAt: nowSec,
+            expiresAt: nowSec + 285 // Valid up to 285s, close to 300s expiration
+        };
+    }
+
     // The URL of the transcoded HLS master playlist, built from the claim data.
     function buildHlsUrl(claim) {
         var c = (claim && claim.reposted_claim) || claim;
@@ -108,6 +133,8 @@ var StreamResolver = (function () {
         buildHlsUrl: buildHlsUrl,
         buildMp4Url: buildMp4Url,
         getStreamingSourceUrl: getStreamingSourceUrl,
-        reportWatchmanPlayback: reportWatchmanPlayback
+        reportWatchmanPlayback: reportWatchmanPlayback,
+        getCachedMagicUrl: getCachedMagicUrl,
+        setCachedMagicUrl: setCachedMagicUrl
     };
 })();
