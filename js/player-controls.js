@@ -133,6 +133,12 @@ var PlayerControls = (function () {
             maxDur = dur > 0 ? dur : (videoEl.currentTime + direction + 100);
             target = Math.max(0, Math.min(maxDur, videoEl.currentTime + direction));
 
+            // Record the intent before the assignment: this is the only moment
+            // where we know the seek is the user's, and not the element
+            // repositioning itself after a source swap.
+            if (typeof Player !== 'undefined' && Player.beginSeek) {
+                Player.beginSeek(target, true);
+            }
             videoEl.currentTime = target;
 
             if (progressFillEl) {

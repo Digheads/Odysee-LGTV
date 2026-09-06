@@ -15,7 +15,36 @@ var Player = (function () {
     var isPlayerActive = false;
     var targetResumeTime = 0;
     var resumeSeekDone = false;
+    // Last playback position actually observed by timeupdate. The video element
+    // reports currentTime 0 for a while after the watchdog swaps the source, so
+    // this is the floor a reconnect may fall back to instead of restarting at 0.
+    var lastGoodTime = 0;
     var videoDuration = 0;
+    // Which source actually played. Old webOS gives no direct answer, so we read
+    // it off currentSrc once 'playing' fires; the watchdog then re-links only
+    // this one instead of blindly re-offering HLS on an mp4-only stream.
+    var activeSourceIsHls = false;
+    var activeSourceKnown = false;
+    // A 'seeking' event looks identical whether the user asked for it, the resume
+    // logic jumped, or the element repositioned itself after a source swap. Intent
+    // can only be recorded where currentTime is assigned, so that is what we do.
+    // Landing is confirmed by timeupdate -- this TV does not reliably fire 'seeked'.
+    var SEEK_INTENT_MAX_MS = 25000;
+    var pendingSeekTarget = -1;
+    var pendingSeekIsUser = false;
+    var pendingSeekStartedAt = 0;
+
+    function beginSeek(target, isUser) {
+        pendingSeekTarget = target;
+        pendingSeekIsUser = !!isUser;
+        pendingSeekStartedAt = Date.now();
+    }
+
+    function clearSeekIntent() {
+        pendingSeekTarget = -1;
+        pendingSeekIsUser = false;
+        pendingSeekStartedAt = 0;
+    }
 
     function setSources(video, list) {
         var k;
@@ -53,9 +82,85 @@ var Player = (function () {
         }
     }
 
+    // Every piece of UI / playback state that belongs to the video being left
+    // behind. Owned by closePlayer(). playVideo() only borrows it for the
+    // shelf "up next" switch, which replaces the video without ever closing.
+    function resetPlayerUI() {
+        var videoEl = document.getElementById('video-player');
+        var progressFillEl = document.getElementById('progress-fill');
+        var timeDisplayEl = document.getElementById('time-display');
+        var metaDateEl = document.getElementById('meta-date');
+        var metaViewsEl = document.getElementById('meta-views');
+        var metaReactionsEl = document.getElementById('meta-reactions');
+        var countComments = document.getElementById('comments-count');
+        var playerError = document.getElementById('player-error');
+        var btnLike;
+        var btnDislike;
+        var countLike;
+        var countDislike;
+
+        if (typeof PlayerWatchdog !== 'undefined') {
+            PlayerWatchdog.stop();
+        }
+        if (window._seekStyleTimer) {
+            clearTimeout(window._seekStyleTimer);
+        }
+
+        if (progressFillEl) {
+            progressFillEl.style.width = '0%';
+            progressFillEl.classList.remove('seeking');
+            progressFillEl.style.backgroundImage = '';
+        }
+        if (timeDisplayEl) {
+            timeDisplayEl.textContent = '00:00 / 00:00';
+        }
+        if (metaDateEl) {
+            metaDateEl.innerHTML = '';
+        }
+        if (metaViewsEl) {
+            metaViewsEl.innerHTML = '';
+        }
+        if (metaReactionsEl) {
+            btnLike = document.getElementById('btn-like');
+            btnDislike = document.getElementById('btn-dislike');
+            countLike = document.getElementById('like-count');
+            countDislike = document.getElementById('dislike-count');
+            if (countLike) {
+                countLike.textContent = '0';
+            }
+            if (countDislike) {
+                countDislike.textContent = '0';
+            }
+            if (btnLike) {
+                btnLike.classList.remove('active-like');
+            }
+            if (btnDislike) {
+                btnDislike.classList.remove('active-dislike');
+            }
+        }
+        if (countComments) {
+            countComments.textContent = '0';
+        }
+        if (playerError) {
+            playerError.style.display = 'none';
+        }
+
+        if (videoEl) {
+            videoEl.style.opacity = '1';
+            videoEl.pause();
+            videoEl.onerror = null;
+            videoEl.innerHTML = '';
+            videoEl.removeAttribute('src');
+        }
+
+        rebufCount = 0;
+        rebufStart = 0;
+        rebufDuration = 0;
+    }
+
     function closePlayer() {
-        var containerEl;
-        var videoEl;
+        var containerEl = document.getElementById('player-container');
+        var videoEl = document.getElementById('video-player');
         var rel;
         var cClaim;
         var curClose;
@@ -63,7 +168,6 @@ var Player = (function () {
         var focusableEls;
         var activeIdx;
         var o;
-        var aEl;
 
         isPlayerActive = false;
         if (typeof PlayerComments !== 'undefined') {
@@ -75,52 +179,29 @@ var Player = (function () {
             PlayerShelf.hide();
         }
 
-        aEl = document.getElementById('progress-fill');
-        if (aEl) {
-            aEl.classList.remove('seeking');
-            aEl.style.backgroundImage = '';
-        }
-        if (window._seekStyleTimer) {
-            clearTimeout(window._seekStyleTimer);
-        }
-
-        if (typeof PlayerWatchdog !== 'undefined') {
-            PlayerWatchdog.stop();
-        }
-
-        containerEl = document.getElementById('player-container');
-        videoEl = document.getElementById('video-player');
-
-        if (!videoEl) {
-            return;
-        }
-        videoEl.style.opacity = '1';
-
         cClaim = window._activeClaim;
-        // Send watchman report on close if we have played something
-        if (!videoEl.paused || videoEl.currentTime > 0) {
-            rel = videoDuration > 0 ? (videoEl.currentTime / videoDuration * 100) : 0;
-            StreamResolver.reportWatchmanPlayback(videoEl.currentSrc || '', videoDuration, videoEl.currentTime, rel, rebufCount, rebufDuration);
-        }
-        rebufCount = 0;
-        rebufStart = 0;
-        rebufDuration = 0;
-
-        if (cClaim && cClaim.claim_id && videoEl) {
-            curClose = videoEl.currentTime || 0;
-            if (!videoEl.ended && curClose > 10 && videoDuration > 0 && (videoDuration - curClose > 5) && (resumeSeekDone || targetResumeTime <= 0)) {
-                UserData.saveResumePoint(cClaim.claim_id, curClose, videoDuration, false);
+        if (videoEl) {
+            // Send watchman report on close if we have played something
+            if (!videoEl.paused || videoEl.currentTime > 0) {
+                rel = videoDuration > 0 ? (videoEl.currentTime / videoDuration * 100) : 0;
+                StreamResolver.reportWatchmanPlayback(videoEl.currentSrc || '', videoDuration, videoEl.currentTime, rel, rebufCount, rebufDuration);
             }
-            if (typeof Feed !== 'undefined' && Feed.updateCardProgress) {
-                Feed.updateCardProgress(cClaim.claim_id);
+
+            if (cClaim && cClaim.claim_id) {
+                curClose = videoEl.currentTime || 0;
+                if (!videoEl.ended && curClose > 10 && videoDuration > 0 && (videoDuration - curClose > 5) && (resumeSeekDone || targetResumeTime <= 0)) {
+                    UserData.saveResumePoint(cClaim.claim_id, curClose, videoDuration, false);
+                }
+                if (typeof Feed !== 'undefined' && Feed.updateCardProgress) {
+                    Feed.updateCardProgress(cClaim.claim_id);
+                }
             }
         }
         videoDuration = 0;
 
-        videoEl.pause();
-        videoEl.onerror = null;
-        videoEl.innerHTML = '';
-        videoEl.removeAttribute('src');
+        // Reporting above reads rebuf* / currentTime, so tear down only afterwards.
+        resetPlayerUI();
+
         if (containerEl) {
             containerEl.classList.add('hidden');
         }
@@ -157,65 +238,20 @@ var Player = (function () {
         var clockSvg;
         var metaDateEl;
         var metaViewsEl;
-        var metaReactionsEl;
-        var timeDisplayEl;
-        var countComments;
         var eyeSvg;
-        var progressFillEl;
 
-        // --- Immediately clear ALL stale metadata from previous video ---
+        // Teardown lives in closePlayer(), so on a normal open the UI is already
+        // clean. The shelf "up next" switch calls playVideo() on an open player
+        // and never passes through closePlayer() -- reset the leftovers here.
+        if (playerContainerEl && !playerContainerEl.classList.contains('hidden')) {
+            resetPlayerUI();
+        }
+
         if (titleEl) {
             titleEl.textContent = (claim.value && claim.value.title) ? claim.value.title : 'Loading...';
         }
-        progressFillEl = document.getElementById('progress-fill');
-        if (progressFillEl) {
-            progressFillEl.style.width = '0%';
-            progressFillEl.classList.remove('seeking');
-            progressFillEl.style.backgroundImage = '';
-        }
-        timeDisplayEl = document.getElementById('time-display');
-        if (timeDisplayEl) {
-            timeDisplayEl.textContent = '00:00 / 00:00';
-        }
-        metaDateEl = document.getElementById('meta-date');
-        if (metaDateEl) {
-            metaDateEl.innerHTML = '';
-        }
-        metaViewsEl = document.getElementById('meta-views');
-        if (metaViewsEl) {
-            metaViewsEl.innerHTML = '';
-        }
-        metaReactionsEl = document.getElementById('meta-reactions');
-        if (metaReactionsEl) {
-            var btnLikeOld = document.getElementById('btn-like');
-            var btnDislikeOld = document.getElementById('btn-dislike');
-            var countLikeOld = document.getElementById('like-count');
-            var countDislikeOld = document.getElementById('dislike-count');
-            if (countLikeOld) { countLikeOld.textContent = '0'; }
-            if (countDislikeOld) { countDislikeOld.textContent = '0'; }
-            if (btnLikeOld) { btnLikeOld.classList.remove('active-like'); }
-            if (btnDislikeOld) { btnDislikeOld.classList.remove('active-dislike'); }
-        }
-        countComments = document.getElementById('comments-count');
-        if (countComments) {
-            countComments.textContent = '0';
-        }
-        if (playerError) {
-            playerError.style.display = 'none';
-        }
         if (loadingEl) {
             loadingEl.style.display = 'block';
-        }
-        // --- End stale metadata clearing ---
-
-        // Stop previous playback & watchdog immediately
-        if (videoEl) {
-            videoEl.pause();
-            videoEl.innerHTML = '';
-            videoEl.removeAttribute('src');
-        }
-        if (typeof PlayerWatchdog !== 'undefined') {
-            PlayerWatchdog.stop();
         }
 
         window._activeClaim = claim;
@@ -225,6 +261,10 @@ var Player = (function () {
         targetResumeTime = (resumePoint && !resumePoint.completed && resumePoint.time > 10 && (!resumePoint.duration || resumePoint.time < resumePoint.duration - 15)) ?
             resumePoint.time : 0;
         resumeSeekDone = false;
+        lastGoodTime = 0;
+        activeSourceIsHls = false;
+        activeSourceKnown = false;
+        clearSeekIntent();
 
 
         function handleMediaError(code, url) {
@@ -242,7 +282,7 @@ var Player = (function () {
                 PlayerWatchdog.clearStall();
             }
             cur = videoEl ? (videoEl.currentTime || 0) : 0;
-            if (cur > 5 && !videoEl.seeking && window._pendingSeekTime === undefined) {
+            if (cur > 5 && !videoEl.seeking && pendingSeekTarget < 0) {
                 console.log('Watchdog: mid-stream media error (' + code + ') at ' + cur.toFixed(2) + 's -> instant reconnect!');
                 if (typeof PlayerWatchdog !== 'undefined') {
                     PlayerWatchdog.reconnect(cur);
@@ -335,25 +375,24 @@ var Player = (function () {
                     if (resumeSeekDone || targetResumeTime <= 0) {
                         return;
                     }
+                    // One-shot on purpose. These used to stay attached until a
+                    // 'seeked' event that never comes on this TV, so every later
+                    // watchdog load() re-fired them and dragged playback back to
+                    // the resume point. timeupdate confirms the landing instead.
+                    videoEl.removeEventListener('loadedmetadata', applyResumeSeek);
+                    videoEl.removeEventListener('canplay', applyResumeSeek);
                     try {
+                        beginSeek(targetResumeTime, false);
                         videoEl.currentTime = targetResumeTime;
                         console.log('Resuming playback from ' + targetResumeTime + 's');
                         showResumeNotice(targetResumeTime);
                     } catch (err) {
                         console.error('Resume seek error:', err);
-                    }
-                };
-                var onSeekComplete = function () {
-                    if (videoEl.currentTime >= targetResumeTime - 2) {
-                        resumeSeekDone = true;
-                        videoEl.removeEventListener('seeked', onSeekComplete);
-                        videoEl.removeEventListener('loadedmetadata', applyResumeSeek);
-                        videoEl.removeEventListener('canplay', applyResumeSeek);
+                        clearSeekIntent();
                     }
                 };
                 videoEl.addEventListener('loadedmetadata', applyResumeSeek);
                 videoEl.addEventListener('canplay', applyResumeSeek);
-                videoEl.addEventListener('seeked', onSeekComplete);
             }
 
             videoEl.load();
@@ -697,6 +736,10 @@ var Player = (function () {
         });
 
         videoEl.addEventListener('playing', function () {
+            if (videoEl.currentSrc) {
+                activeSourceIsHls = videoEl.currentSrc.indexOf('.m3u8') !== -1;
+                activeSourceKnown = true;
+            }
             if (loadingEl) {
                 loadingEl.style.display = 'none';
             }
@@ -733,7 +776,7 @@ var Player = (function () {
 
         videoEl.addEventListener('error', function () {
             var cur = videoEl.currentTime || 0;
-            if (cur > 5 && !videoEl.seeking && window._pendingSeekTime === undefined) {
+            if (cur > 5 && !videoEl.seeking && pendingSeekTarget < 0) {
                 if (typeof PlayerWatchdog !== 'undefined') {
                     if (!PlayerWatchdog.isReconnecting()) {
                         console.log('Watchdog: mid-stream error event at ' + cur.toFixed(2) + 's -> instant reconnect!');
@@ -789,6 +832,23 @@ var Player = (function () {
                 }
                 cClaim = window._activeClaim;
                 cur = videoEl.currentTime || 0;
+                if (cur > 0.5) {
+                    // 'playing'/'canplay' are unreliable on this TV, so advancing
+                    // playback time is the authoritative "we are live" signal for
+                    // taking the spinner down after a reconnect.
+                    if (cur > lastGoodTime && loadingEl && loadingEl.style.display !== 'none') {
+                        loadingEl.style.display = 'none';
+                    }
+                    lastGoodTime = cur;
+                }
+                if (pendingSeekTarget >= 0 &&
+                        (Math.abs(cur - pendingSeekTarget) < 1.5 ||
+                         Date.now() - pendingSeekStartedAt > SEEK_INTENT_MAX_MS)) {
+                    clearSeekIntent();
+                }
+                if (!resumeSeekDone && targetResumeTime > 0 && cur >= targetResumeTime - 2) {
+                    resumeSeekDone = true;
+                }
                 pct = 0;
                 if (videoDuration > 0) {
                     pct = (cur / videoDuration * 100);
@@ -846,6 +906,22 @@ var Player = (function () {
         },
         isResumeSeekDone: function () {
             return resumeSeekDone;
+        },
+        getLastGoodTime: function () {
+            return lastGoodTime;
+        },
+        beginSeek: beginSeek,
+        isUserSeekPending: function () {
+            return pendingSeekTarget >= 0 && pendingSeekIsUser;
+        },
+        isSeekPending: function () {
+            return pendingSeekTarget >= 0;
+        },
+        hasActiveSource: function () {
+            return activeSourceKnown;
+        },
+        isActiveSourceHls: function () {
+            return activeSourceIsHls;
         },
         isPlayerActive: function () {
             return isPlayerActive;

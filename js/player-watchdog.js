@@ -61,6 +61,26 @@ var PlayerWatchdog = (function () {
         isReconnecting = false;
     }
 
+    // A source swap leaves videoEl.currentTime at 0 until the new stream is ready,
+    // and startDelayed() can anchor lastTime on that 0 too. Reconnecting on such a
+    // value restarts the video from the beginning, so fall back to the last position
+    // the player actually saw (the same figure that later feeds the resume point and
+    // the progress bar under the grid thumbnails).
+    function safePosition(candidate) {
+        var lastGood = (typeof Player !== 'undefined' && Player.getLastGoodTime) ? Player.getLastGoodTime() : 0;
+        var targetResume = (typeof Player !== 'undefined' && Player.getTargetResumeTime) ? Player.getTargetResumeTime() : 0;
+        var resumeDone = (typeof Player !== 'undefined' && Player.isResumeSeekDone) ? Player.isResumeSeekDone() : true;
+        var floor = lastGood;
+
+        if (candidate && candidate > 0.5) {
+            return candidate;
+        }
+        if (!resumeDone && targetResume > floor) {
+            floor = targetResume;
+        }
+        return floor > 0.5 ? floor : 0;
+    }
+
     function reconnect(savedTime) {
         var videoEl = document.getElementById('video-player');
         var loadingEl = document.getElementById('player-loading');
@@ -72,10 +92,11 @@ var PlayerWatchdog = (function () {
         var wasMuted;
         var needsSeek;
         var isRestored;
-        var seekTimeout;
+        var readyPoll;
+        var giveUpTimer;
+        var seekIssued;
+        var seekIssuedAt;
         var warmXhr;
-        var targetResume;
-        var resumeDone;
 
         if (!videoEl) {
             return;
@@ -103,7 +124,8 @@ var PlayerWatchdog = (function () {
             StreamResolver.clearCachedMagicUrl(window._activeClaim.claim_id);
         }
         newUrl = cachedM || Utils.buildPlayableUrl(raw, useM);
-        console.log('Watchdog: reconnecting to ' + newUrl + (cachedM ? ' [pre-warmed cache]' : '') + ' at time ' + (savedTime ? savedTime.toFixed(2) : 0));
+        savedTime = safePosition(savedTime);
+        console.log('Watchdog: reconnecting to ' + newUrl + (cachedM ? ' [pre-warmed cache]' : '') + ' at time ' + savedTime.toFixed(2));
 
         if (loadingEl) {
             loadingEl.style.display = 'block';
@@ -113,14 +135,6 @@ var PlayerWatchdog = (function () {
         }
         videoEl.style.opacity = '1';
 
-        targetResume = Player.getTargetResumeTime ? Player.getTargetResumeTime() : 0;
-        resumeDone = Player.isResumeSeekDone ? Player.isResumeSeekDone() : true;
-
-        if (!savedTime || savedTime <= 0.5) {
-            if (!resumeDone && targetResume > 0.5) {
-                savedTime = targetResume;
-            }
-        }
         wasMuted = videoEl.muted;
         needsSeek = (savedTime && savedTime > 0.5);
         if (needsSeek) {
@@ -128,13 +142,23 @@ var PlayerWatchdog = (function () {
         }
 
         isRestored = false;
-        seekTimeout = null;
+        readyPoll = null;
+        giveUpTimer = null;
+        seekIssued = false;
+        seekIssuedAt = 0;
+
+        function clearGiveUp() {
+            if (giveUpTimer) {
+                clearTimeout(giveUpTimer);
+                giveUpTimer = null;
+            }
+        }
 
         function cleanupListeners() {
             clearReconnectStall();
-            if (seekTimeout) {
-                clearTimeout(seekTimeout);
-                seekTimeout = null;
+            if (readyPoll) {
+                clearInterval(readyPoll);
+                readyPoll = null;
             }
             videoEl.removeEventListener('loadedmetadata', onMeta);
             videoEl.removeEventListener('canplay', onCanPlay);
@@ -149,10 +173,11 @@ var PlayerWatchdog = (function () {
             }
             isRestored = true;
             isReconnecting = false;
+            clearGiveUp();
             cleanupListeners();
-            if (loadingEl) {
-                loadingEl.style.display = 'none';
-            }
+            // The spinner stays up until playback genuinely resumes -- the
+            // 'playing'/'canplay' handlers in player.js take it down. Hiding it
+            // here showed a frozen-looking still frame while nothing played.
             videoEl.style.opacity = '1';
             videoEl.muted = wasMuted;
 
@@ -167,6 +192,25 @@ var PlayerWatchdog = (function () {
             }
         }
 
+        function giveUp(why) {
+            if (isRestored) {
+                return;
+            }
+            isRestored = true;
+            isReconnecting = false;
+            clearGiveUp();
+            cleanupListeners();
+            console.error('Watchdog: giving up on reconnect (' + why + ')');
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
+            videoEl.muted = wasMuted;
+            if (playerError) {
+                playerError.textContent = 'Lost the connection to the stream and could not restore it. Please try again.';
+                playerError.style.display = 'block';
+            }
+        }
+
         function onSeeked() {
             console.log('Watchdog: seeked to ' + videoEl.currentTime.toFixed(2));
             restorePlayback();
@@ -177,38 +221,46 @@ var PlayerWatchdog = (function () {
         }
 
         function onCanPlay() {
-            console.log('Watchdog: canplay fired, readyState=' + videoEl.readyState + ' currentTime=' + videoEl.currentTime.toFixed(2));
-            if (!needsSeek) {
+            whenReady('canplay event');
+        }
+
+        // A reconnect gets no patience: the moment the element can play, it plays.
+        // This TV frequently never fires canplay/seeked after a mid-stream load(),
+        // so readyState is polled as the primary signal and the event is a bonus.
+        function whenReady(reason) {
+            if (isRestored || seekIssued) {
+                return;
+            }
+            console.log('Watchdog: ready via ' + reason + ', readyState=' + videoEl.readyState + ' currentTime=' + videoEl.currentTime.toFixed(2));
+            if (!needsSeek || Math.abs(videoEl.currentTime - savedTime) <= 0.5) {
                 restorePlayback();
                 return;
             }
-
-            if (Math.abs(videoEl.currentTime - savedTime) <= 0.5) {
-                console.log('Watchdog: already aligned at ' + videoEl.currentTime.toFixed(2) + ', restoring');
+            console.log('Watchdog: seeking to ' + savedTime.toFixed(2));
+            seekIssued = true;
+            seekIssuedAt = Date.now();
+            videoEl.addEventListener('seeked', onSeeked);
+            try {
+                videoEl.currentTime = savedTime;
+            } catch (e) {
+                console.error('Watchdog: error seeking to savedTime', e);
                 restorePlayback();
-            } else {
-                console.log('Watchdog: seeking to ' + savedTime.toFixed(2));
-                videoEl.addEventListener('seeked', onSeeked);
-                try {
-                    videoEl.currentTime = savedTime;
-                } catch (e) {
-                    console.error('Watchdog: error seeking to savedTime', e);
-                    restorePlayback();
-                }
             }
         }
 
         function applySource(urlToUse) {
             var finalUrl = urlToUse;
             var clean;
-            var hlsUrl;
             var claim;
+            var knownSource;
+            var useHls;
+            var hlsUrl;
             var s;
 
-            if (needsSeek) {
-                clean = urlToUse.split('#')[0];
-                finalUrl = clean + '#t=' + savedTime.toFixed(2);
-            }
+            claim = window._activeClaim;
+            knownSource = (typeof Player !== 'undefined' && Player.hasActiveSource) ? Player.hasActiveSource() : false;
+            useHls = knownSource && Player.isActiveSourceHls();
+
             console.log('Watchdog: applying source. readyState=' + videoEl.readyState + ' networkState=' + videoEl.networkState);
             window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
             window._magicPrefetchDone = false;
@@ -216,31 +268,73 @@ var PlayerWatchdog = (function () {
             videoEl.addEventListener('loadedmetadata', onMeta);
             videoEl.addEventListener('canplay', onCanPlay);
 
-            // Build dual sources (HLS + MP4) like the original r() does
-            claim = window._activeClaim;
-            hlsUrl = (claim && typeof StreamResolver !== 'undefined' && StreamResolver.buildHlsUrl) ?
-                StreamResolver.buildHlsUrl(claim) : null;
-
             videoEl.removeAttribute('src');
             videoEl.innerHTML = '';
-            if (hlsUrl) {
+
+            if (useHls) {
+                // HLS won at startup, so re-link that and nothing else. The magic
+                // token belongs to the mp4 endpoint; the playlist hands out its own
+                // segment URLs, so the playlist is simply reloaded as-is.
+                hlsUrl = (claim && typeof StreamResolver !== 'undefined' && StreamResolver.buildHlsUrl) ?
+                    StreamResolver.buildHlsUrl(claim) : null;
+                if (hlsUrl) {
+                    s = document.createElement('source');
+                    s.src = hlsUrl;
+                    s.type = 'application/vnd.apple.mpegurl';
+                    videoEl.appendChild(s);
+                }
+            }
+
+            if (!useHls || !hlsUrl) {
+                // mp4 path. Only offer HLS alongside it while nothing has played
+                // yet and we genuinely do not know which source works -- re-adding
+                // an unvalidated HLS source to an mp4-only stream used to make the
+                // element chew on an unplayable playlist for the whole timeout.
+                if (needsSeek) {
+                    clean = urlToUse.split('#')[0];
+                    finalUrl = clean + '#t=' + savedTime.toFixed(2);
+                }
+                if (!knownSource) {
+                    hlsUrl = (claim && typeof StreamResolver !== 'undefined' && StreamResolver.buildHlsUrl) ?
+                        StreamResolver.buildHlsUrl(claim) : null;
+                    if (hlsUrl) {
+                        s = document.createElement('source');
+                        s.src = hlsUrl;
+                        s.type = 'application/vnd.apple.mpegurl';
+                        videoEl.appendChild(s);
+                    }
+                }
                 s = document.createElement('source');
-                s.src = hlsUrl;
-                s.type = 'application/vnd.apple.mpegurl';
+                s.src = finalUrl;
+                s.type = 'video/mp4';
                 videoEl.appendChild(s);
             }
-            s = document.createElement('source');
-            s.src = finalUrl;
-            s.type = 'video/mp4';
-            videoEl.appendChild(s);
+
             videoEl.load();
 
-            seekTimeout = setTimeout(function () {
-                if (!isRestored) {
-                    console.warn('Watchdog: seeked/canplay did not fire within 10s, forcing playback');
-                    restorePlayback();
+            if (readyPoll) {
+                clearInterval(readyPoll);
+            }
+            readyPoll = setInterval(function () {
+                if (isRestored) {
+                    clearInterval(readyPoll);
+                    readyPoll = null;
+                    return;
                 }
-            }, 10000);
+                if (seekIssued) {
+                    // Phase 2: the seek is in flight. 'seeked' usually never
+                    // arrives here, so the landing is detected by position, with
+                    // a short cap after which we simply play from wherever we are.
+                    if (Math.abs(videoEl.currentTime - savedTime) <= 1.5 || Date.now() - seekIssuedAt > 2000) {
+                        restorePlayback();
+                    }
+                    return;
+                }
+                // Phase 1: wait for the element to become playable.
+                if (videoEl.readyState >= 3) {
+                    whenReady('readyState poll');
+                }
+            }, 250);
         }
 
         function finishWarmup(url) {
@@ -285,6 +379,15 @@ var PlayerWatchdog = (function () {
             finishWarmup(newUrl);
         };
         warmXhr.send();
+
+        // Anti-hang ceiling for the whole reconnect, not a grace period: the fast
+        // path is the readyState poll. reconnect() refuses to run again while
+        // isReconnecting is set, so an attempt that never resolves would wedge the
+        // watchdog for good. Armed once, so the 15s source-flavour retry gets the
+        // remaining ~10s rather than a fresh full-length window.
+        giveUpTimer = setTimeout(function () {
+            giveUp('no playable data after 25s');
+        }, 25000);
 
         reconnectStallTimer = setTimeout(function () {
             var currentUseMagic;
@@ -409,12 +512,21 @@ var PlayerWatchdog = (function () {
                         }
                     }
 
+                    // A seek parks currentTime while it lands, which looks exactly
+                    // like a stall from here. The player records who asked for it;
+                    // the flag is self-expiring, so this cannot wedge the detector.
+                    if (typeof Player !== 'undefined' && Player.isSeekPending && Player.isSeekPending()) {
+                        stuckCount = 0;
+                        lastTime = videoEl.currentTime;
+                        return;
+                    }
+
                     current = videoEl.currentTime;
                     if (Math.abs(current - lastTime) < 0.1) {
                         stuckCount += 1;
                         if (stuckCount >= 2) {
                             console.log('Watchdog: mid-stream stall, reconnecting!');
-                            savedTime = videoEl.currentTime || lastTime || 0;
+                            savedTime = safePosition(videoEl.currentTime || lastTime || 0);
                             reconnect(savedTime);
                         }
                     } else {

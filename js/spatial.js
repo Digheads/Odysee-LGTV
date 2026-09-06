@@ -108,6 +108,96 @@ var SpatialNavigation = (function () {
         };
     }
 
+    // The grid is a 4-column inline-block layout, so DOM order matches visual
+    // order row by row: the neighbour in any direction is only a few indices
+    // away. Scanning every card on a long feed costs a getBoundingClientRect()
+    // per card on every (auto-repeating) arrow press, so cards further than
+    // this many indices away are skipped. Chrome elements (nav items, search,
+    // channel header) are never skipped -- there are only a handful of them and
+    // they sit visually far from their DOM index.
+    var GRID_WINDOW = 24;
+
+    function findBestCandidate(keyCode, currentEl, originRect, isVideoCard, isChannelHeader, windowSize) {
+        var bestIndex = -1;
+        var minDistance = Infinity;
+        var f;
+        var candidateEl;
+        var candidateRect;
+        var isCard;
+        var dx;
+        var dy;
+        var dist;
+        var isValid;
+
+        for (f = 0; f < focusableElements.length; f++) {
+            if (f === focusedIndex) {
+                continue;
+            }
+            candidateEl = focusableElements[f];
+
+            isCard = candidateEl.classList.contains('video-card') || candidateEl.classList.contains('playlist-card');
+            if (isCard && Math.abs(f - focusedIndex) > windowSize) {
+                continue;
+            }
+
+            if (isVideoCard && (keyCode === 37 || keyCode === 39) && (candidateEl.id === 'search-input' || candidateEl.id === 'btn-search')) {
+                continue;
+            }
+            if (isVideoCard && keyCode !== 37 && candidateEl.classList.contains('nav-item')) {
+                continue;
+            }
+            if (isChannelHeader && keyCode === 37 && isCard) {
+                continue;
+            }
+
+            candidateRect = getRect(candidateEl);
+            dx = candidateRect.cx - originRect.cx;
+            dy = candidateRect.cy - originRect.cy;
+            dist = Math.sqrt(dx * dx + dy * dy);
+            isValid = false;
+
+            switch (keyCode) {
+                case 37:
+                    if (candidateRect.cx < originRect.cx && Math.abs(dy) <= Math.abs(dx)) {
+                        isValid = true;
+                    }
+                    break;
+                case 38:
+                    if (candidateRect.cy < originRect.cy) {
+                        if (candidateEl.id === 'search-input' || candidateEl.id === 'btn-search' || candidateEl.id === 'cp-header' || candidateEl.id === 'btn-channel-follow') {
+                            isValid = true;
+                        } else if (Math.abs(dx) <= Math.abs(dy)) {
+                            isValid = true;
+                        }
+                    }
+                    break;
+                case 39:
+                    if (candidateRect.cx > originRect.cx && Math.abs(dy) <= Math.abs(dx)) {
+                        isValid = true;
+                    }
+                    break;
+                case 40:
+                    if (candidateRect.cy > originRect.cy) {
+                        if (currentEl.id === 'btn-channel-follow' || currentEl.id === 'cp-header') {
+                            isValid = true;
+                        } else if (Math.abs(dx) <= Math.abs(dy)) {
+                            isValid = true;
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+
+            if (isValid && dist < minDistance) {
+                minDistance = dist;
+                bestIndex = f;
+            }
+        }
+
+        return bestIndex;
+    }
+
     function handleKeyDown(e) {
         var currentEl;
         var override;
@@ -122,14 +212,6 @@ var SpatialNavigation = (function () {
         var isChannelHeader;
         var originRect;
         var bestIndex;
-        var minDistance;
-        var f;
-        var candidateEl;
-        var candidateRect;
-        var dx;
-        var dy;
-        var dist;
-        var isValid;
 
         if (isLocked) {
             if ((e.keyCode >= 37 && e.keyCode <= 40) || e.keyCode === 13) {
@@ -144,6 +226,27 @@ var SpatialNavigation = (function () {
         currentEl = focusableElements[focusedIndex];
         if (!currentEl) {
             focusElement(0);
+            return;
+        }
+
+        // OK has nothing to do with geometry. Handle it before the candidate
+        // scan: inside the loop it would never run when the focused element is
+        // the only focusable (the loop body is skipped for f === focusedIndex),
+        // and it would pay for two pointless layout reads on every press.
+        if (e.keyCode === 13) {
+            e.preventDefault();
+            if (!okIsDown) {
+                okIsDown = true;
+                okLongPressed = false;
+                okTimer = setTimeout(function () {
+                    var b;
+
+                    okLongPressed = true;
+                    b = document.createEvent('CustomEvent');
+                    b.initCustomEvent('longpress', true, true, null);
+                    currentEl.dispatchEvent(b);
+                }, 1200);
+            }
             return;
         }
 
@@ -210,79 +313,13 @@ var SpatialNavigation = (function () {
         isVideoCard = currentEl.classList.contains('video-card') || currentEl.classList.contains('playlist-card');
         isChannelHeader = currentEl.id === 'cp-header' || currentEl.classList.contains('channel-header') || currentEl.id === 'btn-channel-follow' || currentEl.classList.contains('btn-channel-follow');
         originRect = getRect(currentEl);
-        bestIndex = -1;
-        minDistance = Infinity;
 
-        for (f = 0; f < focusableElements.length; f++) {
-            if (f !== focusedIndex) {
-                candidateEl = focusableElements[f];
-                if (isVideoCard && (e.keyCode === 37 || e.keyCode === 39) && (candidateEl.id === 'search-input' || candidateEl.id === 'btn-search')) {
-                    continue;
-                }
-                if (isVideoCard && e.keyCode !== 37 && candidateEl.classList.contains('nav-item')) {
-                    continue;
-                }
-                if (isChannelHeader && e.keyCode === 37 && (candidateEl.classList.contains('video-card') || candidateEl.classList.contains('playlist-card'))) {
-                    continue;
-                }
-
-                candidateRect = getRect(candidateEl);
-                dx = candidateRect.cx - originRect.cx;
-                dy = candidateRect.cy - originRect.cy;
-                dist = Math.sqrt(dx * dx + dy * dy);
-                isValid = false;
-
-                switch (e.keyCode) {
-                    case 37:
-                        if (candidateRect.cx < originRect.cx && Math.abs(dy) <= Math.abs(dx)) {
-                            isValid = true;
-                        }
-                        break;
-                    case 38:
-                        if (candidateRect.cy < originRect.cy) {
-                            if (candidateEl.id === 'search-input' || candidateEl.id === 'btn-search' || candidateEl.id === 'cp-header' || candidateEl.id === 'btn-channel-follow') {
-                                isValid = true;
-                            } else if (Math.abs(dx) <= Math.abs(dy)) {
-                                isValid = true;
-                            }
-                        }
-                        break;
-                    case 39:
-                        if (candidateRect.cx > originRect.cx && Math.abs(dy) <= Math.abs(dx)) {
-                            isValid = true;
-                        }
-                        break;
-                    case 40:
-                        if (candidateRect.cy > originRect.cy) {
-                            if (currentEl.id === 'btn-channel-follow' || currentEl.id === 'cp-header') {
-                                isValid = true;
-                            } else if (Math.abs(dx) <= Math.abs(dy)) {
-                                isValid = true;
-                            }
-                        }
-                        break;
-                    case 13:
-                        e.preventDefault();
-                        if (!okIsDown) {
-                            okIsDown = true;
-                            okLongPressed = false;
-                            okTimer = setTimeout(function () {
-                                var b;
-                                okLongPressed = true;
-                                b = document.createEvent('CustomEvent');
-                                b.initCustomEvent('longpress', true, true, null);
-                                currentEl.dispatchEvent(b);
-                            }, 1200);
-                        }
-                        return;
-                    default:
-                        break;
-                }
-                if (isValid && dist < minDistance) {
-                    minDistance = dist;
-                    bestIndex = f;
-                }
-            }
+        bestIndex = findBestCandidate(e.keyCode, currentEl, originRect, isVideoCard, isChannelHeader, GRID_WINDOW);
+        if (bestIndex === -1) {
+            // Nothing in the window: the target is chrome that got filtered out,
+            // or the layout is not the usual grid. Fall back to a full scan so
+            // the result is identical to scanning everything from the start.
+            bestIndex = findBestCandidate(e.keyCode, currentEl, originRect, isVideoCard, isChannelHeader, Infinity);
         }
 
         if (bestIndex !== -1 && focusableElements[bestIndex].classList.contains('nav-item') && !currentEl.classList.contains('nav-item')) {
