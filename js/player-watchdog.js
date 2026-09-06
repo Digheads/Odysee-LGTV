@@ -51,6 +51,10 @@ var PlayerWatchdog = (function () {
             clearInterval(window._watchdogInterval);
             window._watchdogInterval = null;
         }
+        if (window._proactiveSwapTimer) {
+            clearTimeout(window._proactiveSwapTimer);
+            window._proactiveSwapTimer = null;
+        }
         clearStall();
         clearReconnectStall();
         stuckCount = 0;
@@ -197,19 +201,38 @@ var PlayerWatchdog = (function () {
         function applySource(urlToUse) {
             var finalUrl = urlToUse;
             var clean;
+            var hlsUrl;
+            var claim;
+            var s;
 
             if (needsSeek) {
                 clean = urlToUse.split('#')[0];
                 finalUrl = clean + '#t=' + savedTime.toFixed(2);
             }
-            console.log('Watchdog: applying direct src. readyState=' + videoEl.readyState + ' networkState=' + videoEl.networkState);
+            console.log('Watchdog: applying source. readyState=' + videoEl.readyState + ' networkState=' + videoEl.networkState);
             window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
             window._magicPrefetchDone = false;
 
             videoEl.addEventListener('loadedmetadata', onMeta);
             videoEl.addEventListener('canplay', onCanPlay);
 
-            videoEl.src = finalUrl;
+            // Build dual sources (HLS + MP4) like the original r() does
+            claim = window._activeClaim;
+            hlsUrl = (claim && typeof StreamResolver !== 'undefined' && StreamResolver.buildHlsUrl) ?
+                StreamResolver.buildHlsUrl(claim) : null;
+
+            videoEl.removeAttribute('src');
+            videoEl.innerHTML = '';
+            if (hlsUrl) {
+                s = document.createElement('source');
+                s.src = hlsUrl;
+                s.type = 'application/vnd.apple.mpegurl';
+                videoEl.appendChild(s);
+            }
+            s = document.createElement('source');
+            s.src = finalUrl;
+            s.type = 'video/mp4';
+            videoEl.appendChild(s);
             videoEl.load();
 
             seekTimeout = setTimeout(function () {
@@ -351,6 +374,31 @@ var PlayerWatchdog = (function () {
                                         if (preXhr.status === 200 || preXhr.status === 308 || (preXhr.status >= 200 && preXhr.status < 400)) {
                                             console.log('Watchdog: proactive magic link pre-warmed successfully (' + preXhr.status + ')');
                                             StreamResolver.setCachedMagicUrl(claimId, nextMagicUrl);
+                                            // Schedule proactive source swap 30s after pre-warm to avoid stall
+                                            if (window._proactiveSwapTimer) {
+                                                clearTimeout(window._proactiveSwapTimer);
+                                            }
+                                            window._proactiveSwapTimer = setTimeout(function () {
+                                                var swapUrl;
+                                                var swapTime;
+                                                var swapVideo;
+                                                var swapClaimId;
+
+                                                window._proactiveSwapTimer = null;
+                                                swapVideo = document.getElementById('video-player');
+                                                swapClaimId = window._activeClaim ? window._activeClaim.claim_id : null;
+                                                if (!swapVideo || swapVideo.paused || swapVideo.ended || !swapClaimId) {
+                                                    return;
+                                                }
+                                                swapUrl = StreamResolver.getCachedMagicUrl(swapClaimId);
+                                                if (!swapUrl) {
+                                                    return;
+                                                }
+                                                swapTime = swapVideo.currentTime || 0;
+                                                console.log('Watchdog: proactive source swap at ' + swapTime.toFixed(2) + 's -> ' + swapUrl);
+                                                StreamResolver.clearCachedMagicUrl(swapClaimId);
+                                                reconnect(swapTime);
+                                            }, 30000);
                                         } else {
                                             console.warn('Watchdog: proactive pre-warm returned status ' + preXhr.status + ', will retry');
                                         }

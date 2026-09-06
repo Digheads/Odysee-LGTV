@@ -220,8 +220,8 @@ var PlayerShelf = (function () {
             return;
         }
         if (targetShelfRow === 1) {
-            scrollEl.style.webkitTransform = 'translate3d(0, -275px, 0)';
-            scrollEl.style.transform = 'translate3d(0, -275px, 0)';
+            scrollEl.style.webkitTransform = 'translate3d(0, -295px, 0)';
+            scrollEl.style.transform = 'translate3d(0, -295px, 0)';
         } else {
             scrollEl.style.webkitTransform = 'translate3d(0, 0, 0)';
             scrollEl.style.transform = 'translate3d(0, 0, 0)';
@@ -268,6 +268,28 @@ var PlayerShelf = (function () {
         return cachedShelfCards[shelfRow][idx] || null;
     }
 
+    function setShelfState(st) {
+        var shelf = document.getElementById('player-related-shelf');
+        currentShelfState = st;
+        if (shelf) {
+            if (st === SHELF_STATE.ACTIVE) {
+                shelf.classList.remove('peek');
+                shelf.classList.remove('fade-out');
+                shelf.classList.remove('hidden');
+                shelf.classList.add('visible');
+            } else if (st === SHELF_STATE.PEEK) {
+                shelf.classList.remove('visible');
+                shelf.classList.remove('fade-out');
+                shelf.classList.remove('hidden');
+                shelf.classList.add('peek');
+            } else if (st === SHELF_STATE.HIDDEN) {
+                shelf.classList.remove('visible');
+                shelf.classList.remove('peek');
+                shelf.classList.add('fade-out');
+            }
+        }
+    }
+
     return {
         SHELF_STATE: SHELF_STATE,
         updateHeader: updatePlayerChannelHeader,
@@ -277,7 +299,7 @@ var PlayerShelf = (function () {
         scrollCardIntoView: scrollRelatedCardIntoView,
         getCard: getCardAtShelf,
         getState: function () { return currentShelfState; },
-        setState: function (st) { currentShelfState = st; },
+        setState: setShelfState,
         isOpen: function () { return isRelatedShelfOpen; },
         setOpen: function (val) { isRelatedShelfOpen = val; },
         getActiveRow: function () { return activeShelfRow; },

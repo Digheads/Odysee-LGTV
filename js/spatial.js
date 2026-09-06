@@ -3,6 +3,9 @@ var SpatialNavigation = (function () {
     var focusedIndex = -1;
     var lastFocusedEl = null;
     var isLocked = false;
+    var okIsDown = false;
+    var okLongPressed = false;
+    var okTimer = null;
 
     function refresh() {
         var elements = document.querySelectorAll('.focusable');
@@ -260,12 +263,12 @@ var SpatialNavigation = (function () {
                         break;
                     case 13:
                         e.preventDefault();
-                        if (!window._spatialOkIsDown) {
-                            window._spatialOkIsDown = true;
-                            window._spatialOkLongPressed = false;
-                            window._spatialOkTimer = setTimeout(function () {
+                        if (!okIsDown) {
+                            okIsDown = true;
+                            okLongPressed = false;
+                            okTimer = setTimeout(function () {
                                 var b;
-                                window._spatialOkLongPressed = true;
+                                okLongPressed = true;
                                 b = document.createEvent('CustomEvent');
                                 b.initCustomEvent('longpress', true, true, null);
                                 currentEl.dispatchEvent(b);
@@ -325,13 +328,13 @@ var SpatialNavigation = (function () {
                 }
                 if (ev.keyCode === 13) {
                     ev.preventDefault();
-                    if (window._spatialOkIsDown) {
-                        window._spatialOkIsDown = false;
-                        if (window._spatialOkTimer) {
-                            clearTimeout(window._spatialOkTimer);
-                            window._spatialOkTimer = null;
+                    if (okIsDown) {
+                        okIsDown = false;
+                        if (okTimer) {
+                            clearTimeout(okTimer);
+                            okTimer = null;
                         }
-                        if (!window._spatialOkLongPressed) {
+                        if (!okLongPressed) {
                             el = document.querySelector('.focusable.focused');
                             if (el) {
                                 if (el.tagName === 'INPUT') {
@@ -384,6 +387,9 @@ var SpatialNavigation = (function () {
         },
         isLocked: function () {
             return isLocked;
+        },
+        isLongPressed: function () {
+            return okLongPressed;
         },
         clearFocus: clearFocus
     };

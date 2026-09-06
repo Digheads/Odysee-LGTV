@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
         releaseTimer = null;
         mainContent.addEventListener('scroll', function () {
             if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 500) {
-                if (window.isChannelPageOpen) {
+                if (typeof Channel !== 'undefined' && Channel.isOpen()) {
                     Channel.loadMore();
                 } else {
                     Feed.loadMoreContent();
@@ -125,9 +125,13 @@ document.addEventListener('DOMContentLoaded', function () {
             } else {
                 Player.close();
             }
-        } else if (window.isPlaylistDetailOpen) {
-            Feed.closePlaylistDetail(false, true);
-        } else if (window.isChannelPageOpen) {
+        } else if ((typeof PlaylistView !== 'undefined' && PlaylistView.isOpen()) || window.isPlaylistDetailOpen) {
+            if (typeof PlaylistView !== 'undefined') {
+                PlaylistView.closePlaylistDetail(false, true);
+            } else {
+                Feed.closePlaylistDetail(false, true);
+            }
+        } else if ((typeof Channel !== 'undefined' && Channel.isOpen()) || window.isChannelPageOpen) {
             Channel.close();
         }
     });
@@ -136,19 +140,25 @@ document.addEventListener('DOMContentLoaded', function () {
     window.addEventListener('keydown', function (e) {
         var playerEl = document.getElementById('player-container');
         var isPlayerOpen = playerEl && !playerEl.classList.contains('hidden');
+        var isPlaylistOpen = (typeof PlaylistView !== 'undefined' && PlaylistView.isOpen()) || window.isPlaylistDetailOpen;
+        var isChannelOpen = (typeof Channel !== 'undefined' && Channel.isOpen()) || window.isChannelPageOpen;
         var keyCode;
 
-        if (!isPlayerOpen && window.isPlaylistDetailOpen) {
+        if (!isPlayerOpen && isPlaylistOpen) {
             keyCode = e.keyCode;
             if (keyCode === 413 || keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
                 e.preventDefault();
                 e.stopPropagation();
-                Feed.closePlaylistDetail();
+                if (typeof PlaylistView !== 'undefined') {
+                    PlaylistView.closePlaylistDetail();
+                } else {
+                    Feed.closePlaylistDetail();
+                }
                 return;
             }
         }
 
-        if (!isPlayerOpen && window.isChannelPageOpen) {
+        if (!isPlayerOpen && isChannelOpen) {
             keyCode = e.keyCode;
             if (keyCode === 413 || keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
                 e.preventDefault();

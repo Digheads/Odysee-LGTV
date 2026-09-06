@@ -21,6 +21,7 @@ var Player = (function () {
         var k;
         var s;
 
+        video.removeAttribute('src');
         video.innerHTML = '';
         for (k = 0; k < list.length; k++) {
             s = document.createElement('source');
@@ -119,13 +120,13 @@ var Player = (function () {
         videoEl.pause();
         videoEl.onerror = null;
         videoEl.innerHTML = '';
-        videoEl.src = '';
+        videoEl.removeAttribute('src');
         if (containerEl) {
             containerEl.classList.add('hidden');
         }
         SpatialNavigation.refresh();
 
-        targetCard = window.isChannelPageOpen ? window.lastFocusedChannelCard : window.lastFocusedCard;
+        targetCard = (typeof Channel !== 'undefined' && Channel.isOpen()) ? (Channel.getLastFocusedCard() || window.lastFocusedChannelCard) : window.lastFocusedCard;
         if (targetCard) {
             focusableEls = document.querySelectorAll('.focusable');
             activeIdx = 0;
@@ -158,6 +159,64 @@ var Player = (function () {
         var metaViewsEl;
         var metaReactionsEl;
         var timeDisplayEl;
+        var countComments;
+        var eyeSvg;
+        var progressFillEl;
+
+        // --- Immediately clear ALL stale metadata from previous video ---
+        if (titleEl) {
+            titleEl.textContent = (claim.value && claim.value.title) ? claim.value.title : 'Loading...';
+        }
+        progressFillEl = document.getElementById('progress-fill');
+        if (progressFillEl) {
+            progressFillEl.style.width = '0%';
+            progressFillEl.classList.remove('seeking');
+            progressFillEl.style.backgroundImage = '';
+        }
+        timeDisplayEl = document.getElementById('time-display');
+        if (timeDisplayEl) {
+            timeDisplayEl.textContent = '00:00 / 00:00';
+        }
+        metaDateEl = document.getElementById('meta-date');
+        if (metaDateEl) {
+            metaDateEl.innerHTML = '';
+        }
+        metaViewsEl = document.getElementById('meta-views');
+        if (metaViewsEl) {
+            metaViewsEl.innerHTML = '';
+        }
+        metaReactionsEl = document.getElementById('meta-reactions');
+        if (metaReactionsEl) {
+            var btnLikeOld = document.getElementById('btn-like');
+            var btnDislikeOld = document.getElementById('btn-dislike');
+            var countLikeOld = document.getElementById('like-count');
+            var countDislikeOld = document.getElementById('dislike-count');
+            if (countLikeOld) { countLikeOld.textContent = '0'; }
+            if (countDislikeOld) { countDislikeOld.textContent = '0'; }
+            if (btnLikeOld) { btnLikeOld.classList.remove('active-like'); }
+            if (btnDislikeOld) { btnDislikeOld.classList.remove('active-dislike'); }
+        }
+        countComments = document.getElementById('comments-count');
+        if (countComments) {
+            countComments.textContent = '0';
+        }
+        if (playerError) {
+            playerError.style.display = 'none';
+        }
+        if (loadingEl) {
+            loadingEl.style.display = 'block';
+        }
+        // --- End stale metadata clearing ---
+
+        // Stop previous playback & watchdog immediately
+        if (videoEl) {
+            videoEl.pause();
+            videoEl.innerHTML = '';
+            videoEl.removeAttribute('src');
+        }
+        if (typeof PlayerWatchdog !== 'undefined') {
+            PlayerWatchdog.stop();
+        }
 
         window._activeClaim = claim;
         videoDuration = (claim.value && claim.value.video ? claim.value.video.duration : 0) || 0;
@@ -166,6 +225,7 @@ var Player = (function () {
         targetResumeTime = (resumePoint && !resumePoint.completed && resumePoint.time > 10 && (!resumePoint.duration || resumePoint.time < resumePoint.duration - 15)) ?
             resumePoint.time : 0;
         resumeSeekDone = false;
+
 
         function handleMediaError(code, url) {
             var cur;
@@ -234,9 +294,11 @@ var Player = (function () {
                         playerError.textContent = 'Cannot start the video this time, please try again later. Transcoding requested.';
                         playerError.style.display = 'block';
                     }
-                    q = new XMLHttpRequest();
-                    q.open('GET', 'https://transcoder.odysee.com/api/v1/transcode/' + claim.claim_id, true);
-                    q.send();
+                    if (currentClaim && currentClaim.claim_id) {
+                        q = new XMLHttpRequest();
+                        q.open('GET', 'https://transcoder.odysee.com/api/v1/transcode/' + currentClaim.claim_id, true);
+                        q.send();
+                    }
                 }
             } else if (playerError) {
                 playerError.textContent = 'Cannot start the video this time, please try again later.';
@@ -342,7 +404,7 @@ var Player = (function () {
                     playerError.style.display = 'block';
                 }
                 if (titleEl) {
-                    titleEl.textContent = claim.value.title || 'Unknown Title';
+                    titleEl.textContent = (currentClaim && currentClaim.value && currentClaim.value.title) ? currentClaim.value.title : 'Unknown Title';
                 }
             }
 
@@ -472,27 +534,28 @@ var Player = (function () {
         }
 
         metaViewsEl = document.getElementById('meta-views');
-        if (metaViewsEl) {
-            metaViewsEl.innerHTML = '';
-        }
 
-        metaReactionsEl = document.getElementById('meta-reactions');
-        if (metaReactionsEl) {
-            metaReactionsEl.innerHTML = '';
-        }
-
-        timeDisplayEl = document.getElementById('time-display');
-        if (timeDisplayEl) {
-            timeDisplayEl.textContent = '00:00 / 00:00';
+        if (typeof PlayerControls !== 'undefined') {
+            PlayerControls.renderReactions(
+                claim,
+                claim && claim._cached_reactions ? claim._cached_reactions.like : 0,
+                claim && claim._cached_reactions ? claim._cached_reactions.dislike : 0,
+                claim && claim._cached_reactions ? claim._cached_reactions.myReaction : undefined
+            );
         }
 
         if (claim && claim.claim_id) {
-            UserData.getViewCount(claim.claim_id, function (err, views) {
-                var eyeSvg;
+            var initialViews = (claim.views !== undefined) ? claim.views : ((claim._views !== undefined) ? claim._views : null);
+            if (initialViews !== null && metaViewsEl) {
+                eyeSvg = Icons.get('eye');
+                metaViewsEl.innerHTML = eyeSvg + Utils.formatViewCount(initialViews);
+            }
 
-                if (!err && typeof views === 'number' && metaViewsEl) {
+            UserData.getViewCount(claim.claim_id, function (err, views) {
+                var v = (!err && views !== undefined && views !== null) ? views : initialViews;
+                if (v !== null && v !== undefined && metaViewsEl) {
                     eyeSvg = Icons.get('eye');
-                    metaViewsEl.innerHTML = eyeSvg + Utils.formatViewCount(views);
+                    metaViewsEl.innerHTML = eyeSvg + Utils.formatViewCount(v);
                 }
             });
 
@@ -504,15 +567,15 @@ var Player = (function () {
                 if (!err && res && typeof res.total_items === 'number') {
                     btnComments = document.getElementById('btn-comments');
                     countComments = document.getElementById('comments-count');
-                    iconComments = document.getElementById('icon-comments');
-                    if (iconComments) {
+                    iconComments = document.getElementById('comments-icon') || document.getElementById('icon-comments');
+                    if (iconComments && !iconComments.querySelector('svg')) {
                         iconComments.innerHTML = Icons.get('comments');
                     }
                     if (countComments) {
                         countComments.textContent = res.total_items;
                     }
                     if (btnComments) {
-                        btnComments.style.display = 'inline-flex';
+                        btnComments.style.display = 'inline-block';
                     }
                 }
             });
@@ -535,15 +598,6 @@ var Player = (function () {
 
         isPlayerActive = false;
         window._magicPrefetchDone = false;
-        if (playerError) {
-            playerError.style.display = 'none';
-        }
-        videoEl.innerHTML = '';
-        videoEl.removeAttribute('src');
-        videoEl.src = '';
-        if (titleEl) {
-            titleEl.textContent = claim.value.title || 'Unknown Title';
-        }
 
         if (typeof PlayerShelf !== 'undefined') {
             PlayerShelf.updateHeader(claim);
@@ -552,10 +606,10 @@ var Player = (function () {
 
         SpatialNavigation.lock();
         if (playerContainerEl) {
+            if (playerContainerEl.classList.contains('hidden')) {
+                history.pushState({ playerOpen: true }, 'player');
+            }
             playerContainerEl.classList.remove('hidden');
-        }
-        if (loadingEl) {
-            loadingEl.style.display = 'block';
         }
         if (typeof PlayerControls !== 'undefined') {
             PlayerControls.show(4000);
@@ -588,6 +642,7 @@ var Player = (function () {
         var videoEl = document.getElementById('video-player');
         var playPauseBtn = document.getElementById('btn-play-pause');
         var loadingEl = document.getElementById('player-loading');
+        var playerError = document.getElementById('player-error');
         var progressFillEl = document.getElementById('progress-fill');
         var timeDisplayEl = document.getElementById('time-display');
 
@@ -645,6 +700,9 @@ var Player = (function () {
             if (loadingEl) {
                 loadingEl.style.display = 'none';
             }
+            if (playerError) {
+                playerError.style.display = 'none';
+            }
             if (typeof PlayerWatchdog !== 'undefined') {
                 PlayerWatchdog.clearStall();
             }
@@ -658,6 +716,9 @@ var Player = (function () {
         videoEl.addEventListener('canplay', function () {
             if (loadingEl) {
                 loadingEl.style.display = 'none';
+            }
+            if (playerError) {
+                playerError.style.display = 'none';
             }
             if (typeof PlayerWatchdog !== 'undefined') {
                 PlayerWatchdog.clearStall();

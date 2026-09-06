@@ -123,6 +123,21 @@ var Utils = (function () {
         return Math.max(0, Math.floor(seconds)) + ' seconds ago';
     }
 
+    // View count formatting helper (e.g. 1.2K, 3.4M)
+    function formatViewCount(views) {
+        var num = parseInt(views, 10);
+        if (isNaN(num) || num <= 0) {
+            return '0';
+        }
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+        }
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        }
+        return String(num);
+    }
+
     return {
         setDisplayFlex: setDisplayFlex,
         escapeHtml: escapeHtml,
@@ -130,6 +145,7 @@ var Utils = (function () {
         buildPlayableUrl: buildPlayableUrl,
         formatDuration: formatDuration,
         formatRelativeTime: formatRelativeTime,
+        formatViewCount: formatViewCount,
         getAvatarColor: getAvatarColor,
         getAvatarSrc: getAvatarSrc
     };

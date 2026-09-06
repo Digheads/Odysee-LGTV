@@ -453,6 +453,7 @@ var Auth = (function () {
         },
 
         isLoggedIn: isLoggedIn,
+        isAuthenticated: isLoggedIn,
 
         getAccessToken: function () {
             if (state.expiresAt && Date.now() >= state.expiresAt) {

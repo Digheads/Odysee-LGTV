@@ -3,27 +3,27 @@
 // ---------------------------------------------------------------------------
 
 var Channel = (function () {
-    window.isChannelPageOpen = false;
-    window.channelPageClaimId = null;
-    window.channelPageCurrentPage = 1;
-    window.channelPageHasMore = true;
-    window.channelPageIsLoading = false;
-    window.lastFocusedCard = null;
-    window.lastFocusedChannelCard = null;
-    window.channelPageChannelClaim = null;
-    window.channelPageIsFollowing = false;
+    var isPageOpen = false;
+    var currentClaimId = null;
+    var currentPage = 1;
+    var hasMore = true;
+    var isLoading = false;
+    var lastFocusedChannelCard = null;
+    var currentChannelClaim = null;
+    var followerCount = null;
+    var isFollowing = false;
 
-    function updateFollowButton(isFollowing) {
+    function updateFollowButton(following) {
         var btn;
         var iconSvg;
 
-        window.channelPageIsFollowing = isFollowing;
+        isFollowing = following;
         btn = document.getElementById('btn-channel-follow');
         if (!btn) {
             return;
         }
-        iconSvg = isFollowing ? Icons.get('following') : Icons.get('follow');
-        if (isFollowing) {
+        iconSvg = following ? Icons.get('following') : Icons.get('follow');
+        if (following) {
             btn.innerHTML = iconSvg + '<span class="btn-follow-label">Following</span>';
             btn.classList.add('following');
             btn.title = 'Unfollow this channel';
@@ -37,7 +37,7 @@ var Channel = (function () {
     }
 
     function toggleFollow() {
-        var claim = window.channelPageChannelClaim;
+        var claim = currentChannelClaim;
         var btn;
         var claimId;
         var channelName;
@@ -57,7 +57,7 @@ var Channel = (function () {
         claimId = claim.claim_id;
         channelName = claim.name || '';
 
-        if (window.channelPageIsFollowing) {
+        if (isFollowing) {
             // Unfollow
             UserData.unfollowChannel(claimId, channelName, function (err) {
                 var statsEl;
@@ -68,12 +68,12 @@ var Channel = (function () {
                 if (!err) {
                     updateFollowButton(false);
                     console.log('Channel: Unfollowed ' + channelName);
-                    if (typeof window.channelPageFollowerCount === 'number' && window.channelPageFollowerCount > 0) {
-                        window.channelPageFollowerCount -= 1;
+                    if (typeof followerCount === 'number' && followerCount > 0) {
+                        followerCount -= 1;
                         statsEl = document.getElementById('cp-stats');
-                        uploadsCount = (window.channelPageChannelClaim && window.channelPageChannelClaim.meta && window.channelPageChannelClaim.meta.claims_in_channel) || 0;
+                        uploadsCount = (currentChannelClaim && currentChannelClaim.meta && currentChannelClaim.meta.claims_in_channel) || 0;
                         if (statsEl) {
-                            statsEl.textContent = window.channelPageFollowerCount + ' followers • ' + uploadsCount + ' uploads';
+                            statsEl.textContent = followerCount + ' followers • ' + uploadsCount + ' uploads';
                         }
                     }
                 } else {
@@ -91,12 +91,12 @@ var Channel = (function () {
                 if (!err) {
                     updateFollowButton(true);
                     console.log('Channel: Followed ' + channelName);
-                    if (typeof window.channelPageFollowerCount === 'number') {
-                        window.channelPageFollowerCount += 1;
+                    if (typeof followerCount === 'number') {
+                        followerCount += 1;
                         statsEl = document.getElementById('cp-stats');
-                        uploadsCount = (window.channelPageChannelClaim && window.channelPageChannelClaim.meta && window.channelPageChannelClaim.meta.claims_in_channel) || 0;
+                        uploadsCount = (currentChannelClaim && currentChannelClaim.meta && currentChannelClaim.meta.claims_in_channel) || 0;
                         if (statsEl) {
-                            statsEl.textContent = window.channelPageFollowerCount + ' followers • ' + uploadsCount + ' uploads';
+                            statsEl.textContent = followerCount + ' followers • ' + uploadsCount + ' uploads';
                         }
                     }
                 } else {
@@ -114,6 +114,7 @@ var Channel = (function () {
         var cpHeader;
         var firstCard;
 
+        isPageOpen = false;
         window.isChannelPageOpen = false;
         cp = document.getElementById('channel-page');
         if (cp) {
@@ -140,8 +141,9 @@ var Channel = (function () {
             cpHeader.setAttribute('tabindex', '0');
         }
 
-        window.channelPageChannelClaim = null;
-        window.channelPageFollowerCount = null;
+        currentChannelClaim = null;
+        followerCount = null;
+        currentClaimId = null;
 
         SpatialNavigation.lock();
         SpatialNavigation.refresh();
@@ -183,12 +185,13 @@ var Channel = (function () {
         if (!channelClaim) {
             return;
         }
+        isPageOpen = true;
         window.isChannelPageOpen = true;
-        window.channelPageClaimId = channelClaim.claim_id;
-        window.channelPageCurrentPage = 1;
-        window.channelPageHasMore = true;
-        window.channelPageIsLoading = true;
-        window.channelPageChannelClaim = channelClaim;
+        currentClaimId = channelClaim.claim_id;
+        currentPage = 1;
+        hasMore = true;
+        isLoading = true;
+        currentChannelClaim = channelClaim;
         history.pushState({ channelPage: true }, '', '');
 
         vg = document.getElementById('video-grid');
@@ -229,7 +232,7 @@ var Channel = (function () {
 
         OdyseeAPI.getFollowerCount(channelClaim.claim_id, function (err, followCount) {
             if (!err && followCount !== undefined && statsEl) {
-                window.channelPageFollowerCount = followCount;
+                followerCount = followCount;
                 statsEl.textContent = followCount + ' followers • ' + uploadsCount + ' uploads';
             }
         });
@@ -300,7 +303,7 @@ var Channel = (function () {
             var card;
             var header;
 
-            window.channelPageIsLoading = false;
+            isLoading = false;
             if (cpLoading) {
                 cpLoading.style.display = 'none';
             }
@@ -356,12 +359,12 @@ var Channel = (function () {
         var loadingEl;
         var gridEl;
 
-        if (window.channelPageIsLoading || !window.channelPageHasMore || !window.channelPageClaimId) {
+        if (isLoading || !hasMore || !currentClaimId) {
             return;
         }
 
-        window.channelPageIsLoading = true;
-        window.channelPageCurrentPage += 1;
+        isLoading = true;
+        currentPage += 1;
         loadingEl = document.getElementById('cp-loading');
         if (loadingEl) {
             loadingEl.style.display = 'block';
@@ -369,11 +372,11 @@ var Channel = (function () {
 
         gridEl = document.getElementById('cp-video-grid');
 
-        OdyseeAPI.searchChannelVideos(window.channelPageClaimId, function (err, res) {
+        OdyseeAPI.searchChannelVideos(currentClaimId, function (err, res) {
             var i;
             var card;
 
-            window.channelPageIsLoading = false;
+            isLoading = false;
             if (loadingEl) {
                 loadingEl.style.display = 'none';
             }
@@ -385,7 +388,7 @@ var Channel = (function () {
 
             if (res && res.items && res.items.length > 0) {
                 if (res.items.length < 20) {
-                    window.channelPageHasMore = false;
+                    hasMore = false;
                 }
                 for (i = 0; i < res.items.length; i++) {
                     card = Feed.createVideoCard(res.items[i]);
@@ -395,14 +398,24 @@ var Channel = (function () {
                 }
                 SpatialNavigation.refresh();
             } else {
-                window.channelPageHasMore = false;
+                hasMore = false;
             }
-        }, window.channelPageCurrentPage);
+        }, currentPage);
     }
 
     return {
         open: open,
         close: close,
-        loadMore: loadMore
+        loadMore: loadMore,
+        isOpen: function () {
+            return isPageOpen;
+        },
+        getLastFocusedCard: function () {
+            return lastFocusedChannelCard;
+        },
+        setLastFocusedCard: function (card) {
+            lastFocusedChannelCard = card;
+            window.lastFocusedChannelCard = card;
+        }
     };
 }());

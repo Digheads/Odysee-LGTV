@@ -323,115 +323,7 @@ var UserData = (function () {
         return null;
     }
 
-    function getWatchLaterIds() {
-        return cachedRemoteWatchLaterIds || [];
-    }
 
-    function saveWatchLater(claimId, add) {
-        var list = (cachedRemoteWatchLaterIds || []).slice(0);
-        var idx = list.indexOf(claimId);
-
-        if (add && idx === -1) {
-            list.unshift(claimId);
-        } else if (!add && idx > -1) {
-            list.splice(idx, 1);
-        }
-        cachedRemoteWatchLaterIds = list;
-
-        // Sync to Odysee cloud preferences if logged in
-        if (Auth.isLoggedIn()) {
-            LbryNet.ensureAuthToken(function (token) {
-                function syncToCloud(shared) {
-                    var targetBuiltIn;
-                    var targetKey;
-                    var bk;
-                    var c;
-                    var wl;
-                    var items;
-                    var existingIdx;
-                    var i;
-
-                    if (!shared) {
-                        return;
-                    }
-                    if (!shared.builtInCollections && !shared.builtinCollections) {
-                        shared.builtInCollections = {};
-                    }
-                    targetBuiltIn = shared.builtInCollections || shared.builtinCollections;
-                    targetKey = 'watchlater';
-                    for (bk in targetBuiltIn) {
-                        if (targetBuiltIn.hasOwnProperty(bk)) {
-                            c = targetBuiltIn[bk];
-                            if (c && (String(c.id || bk).toLowerCase() === 'watchlater' || (c.name && c.name.toLowerCase() === 'watch later'))) {
-                                targetKey = bk;
-                                break;
-                            }
-                        }
-                    }
-                    if (!targetBuiltIn[targetKey]) {
-                        targetBuiltIn[targetKey] = {
-                            id: 'watchlater',
-                            name: 'Watch Later',
-                            itemCount: 0,
-                            items: [],
-                            type: 'playlist',
-                            updatedAt: Math.floor(Date.now() / 1000)
-                        };
-                    }
-                    wl = targetBuiltIn[targetKey];
-                    items = (wl.items || []).slice(0);
-                    existingIdx = -1;
-                    for (i = 0; i < items.length; i++) {
-                        if (typeof items[i] === 'string' && items[i].indexOf(claimId) !== -1) {
-                            existingIdx = i;
-                            break;
-                        }
-                    }
-                    if (add && existingIdx === -1) {
-                        items.unshift('lbry://stream#' + claimId);
-                    } else if (!add && existingIdx > -1) {
-                        items.splice(existingIdx, 1);
-                    }
-                    wl.items = items;
-                    wl.itemCount = items.length;
-                    wl.updatedAt = Math.floor(Date.now() / 1000);
-                    cachedSharedPreferences = shared;
-
-                    LbryRpc.call('preference_set', {
-                        key: 'shared',
-                        value: shared
-                    }, function (err) {
-                        if (err) {
-                            console.warn('UserData: Failed to sync watch later to preference_set:', err);
-                        } else {
-                            console.log('UserData: Successfully synced watch later to Odysee cloud preferences.');
-                        }
-                    });
-                }
-
-                if (!token) {
-                    return;
-                }
-
-                if (cachedSharedPreferences) {
-                    syncToCloud(cachedSharedPreferences);
-                } else {
-                    LbryRpc.call('preference_get', { key: 'shared' }, function (err, res) {
-                        var shared = parseSharedPreference(res);
-
-                        if (shared) {
-                            syncToCloud(shared);
-                        }
-                    });
-                }
-            });
-        }
-    }
-
-    function isWatchLater(claimId) {
-        var list = getWatchLaterIds();
-        return list.indexOf(claimId) > -1;
-    }
 
     function extractClaimIdsFromCollection(col) {
         var raw;
@@ -1251,9 +1143,6 @@ var UserData = (function () {
         saveViewProgress: saveViewProgress,
         getResumePoint: getResumePoint,
         saveResumePoint: saveResumePoint,
-        getWatchLaterIds: getWatchLaterIds,
-        saveWatchLater: saveWatchLater,
-        isWatchLater: isWatchLater,
         getWatchLaterVideos: getWatchLaterVideos,
         getUserPlaylists: getUserPlaylists,
         getPlaylistVideos: getPlaylistVideos,

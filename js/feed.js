@@ -69,388 +69,12 @@ var Feed = (function () {
         cb(new Error('Unknown view: ' + id));
     }
 
-    function renderLoginView(containerEl) {
-        containerEl.innerHTML = '<div class="login-card">' +
-            '<h2 class="login-title">Log in to your Odysee account</h2>' +
-            '<p class="login-step">1. Go to the following address on your phone or computer:</p>' +
-            '<div class="login-url">odysee.com/$/activate</div>' +
-            '<p class="login-step">2. Enter this activation code:</p>' +
-            '<div class="login-code-box" id="login-code-box">....-....</div>' +
-            '<div class="login-status" id="login-status-box">' +
-            '<span class="login-spinner"></span><span class="login-status-text">Waiting for confirmation on your device...</span>' +
-            '</div>' +
-            '<button class="focusable btn-login-action" id="btn-login-refresh" style="display:none;">Request a new code</button>' +
-            '</div>';
-
-        SpatialNavigation.refresh();
-
-        Auth.startDeviceFlow(
-            function (info) {
-                var codeBox = document.getElementById('login-code-box');
-                var refreshBtn = document.getElementById('btn-login-refresh');
-
-                if (codeBox) {
-                    codeBox.textContent = info.userCode;
-                }
-                if (refreshBtn) {
-                    refreshBtn.style.display = 'none';
-                }
-            },
-            function (user) {
-                var statusBox = document.getElementById('login-status-box');
-
-                if (statusBox) {
-                    statusBox.innerHTML = '<span style="color:#4ade80;">✓ Successful login!</span>';
-                }
-                setTimeout(function () {
-                    loadPage('nav-profile');
-                }, 1200);
-            },
-            function (err) {
-                var statusBox = document.getElementById('login-status-box');
-                var refreshBtn = document.getElementById('btn-login-refresh');
-
-                if (statusBox) {
-                    statusBox.innerHTML = '<span style="color:#f87171;">' + (err.message || 'An activation error occurred.') + '</span>';
-                }
-                if (refreshBtn) {
-                    refreshBtn.style.display = 'inline-block';
-                    SpatialNavigation.refresh();
-                    refreshBtn.onclick = function () {
-                        renderLoginView(containerEl);
-                    };
-                }
-            }
-        );
-    }
-
-    function renderProfileView(containerEl) {
-        var user = Auth.getUser() || {};
-        var settings = Auth.getSettings() || {
-            hideMature: true,
-            hideShorts: true,
-            hideYoutube: false
-        };
-
-        var rawAvatar = Auth.getAvatarUrl() || (user.avatarUrl || 'icons/spaceman.png');
-        var avatarSrc = Utils.getAvatarSrc(rawAvatar, 160);
-        var isSpaceman = (!avatarSrc || avatarSrc === 'icons/spaceman.png');
-        var chName = user ? (user.channelName || '') : '';
-        var avatarColor = isSpaceman ? Utils.getAvatarColor(chName) : 'transparent';
-
-        var displayName = user.channelName || (user.email ? user.email.split('@')[0] : 'Odysee User');
-        var emailDisplay = user.email || '';
-        var followersText = (user.followers || 0) + ' followers';
-
-        var wrapStyle = isSpaceman ? ' style="background-color: ' + avatarColor + ';"' : '';
-        var imgStyle = isSpaceman ? ' style="background-color: ' + avatarColor + ';"' : '';
-
-        var html;
-        var logoutBtn;
-
-        function setupToggle(btnId, settingKey) {
-            var btn = document.getElementById(btnId);
-
-            if (!btn) {
-                return;
-            }
-            btn.addEventListener('click', function () {
-                var currentVal = !!settings[settingKey];
-                var nextVal = !currentVal;
-
-                settings[settingKey] = nextVal;
-                Auth.updateSetting(settingKey, nextVal);
-                btn.textContent = nextVal ? 'ON' : 'OFF';
-                if (nextVal) {
-                    btn.classList.add('toggle-active');
-                } else {
-                    btn.classList.remove('toggle-active');
-                }
-            });
-        }
-
-        if (displayName.indexOf('@') !== 0 && user.channelName) {
-            displayName = '@' + displayName;
-        }
-
-        html = '<div class="profile-view">' +
-            '<div class="profile-header-card">' +
-            '<div class="profile-avatar-wrap"' + wrapStyle + '>' +
-            '<img src="' + avatarSrc + '" class="profile-avatar-img"' + imgStyle + ' alt="Avatar" onerror="this.src=\'icons/spaceman.png\'">' +
-            '</div>' +
-            '<div class="profile-meta-wrap">' +
-            '<div class="profile-display-name">' + Utils.escapeHtml(displayName) + '</div>' +
-            (emailDisplay ? '<div class="profile-email">' + Utils.escapeHtml(emailDisplay) + '</div>' : '') +
-            '<div class="profile-followers-badge">' + followersText + '</div>' +
-            '</div>' +
-            '<div class="profile-header-actions">' +
-            '<button class="focusable btn-profile-logout" id="btn-logout">Log Out</button>' +
-            '</div>' +
-            '</div>' +
-
-            '<div class="profile-settings-card">' +
-            '<h3 class="profile-settings-title">Settings</h3>' +
-
-            '<div class="setting-row">' +
-            '<div class="setting-info">' +
-            '<div class="setting-name">Hide mature content</div>' +
-            '<div class="setting-desc">You will not see adult (18+) content.</div>' +
-            '</div>' +
-            '<button class="focusable btn-setting-toggle ' + (settings.hideMature ? 'toggle-active' : '') + '" id="toggle-mature">' +
-            (settings.hideMature ? 'ON' : 'OFF') +
-            '</button>' +
-            '</div>' +
-
-            '<div class="setting-row">' +
-            '<div class="setting-info">' +
-            '<div class="setting-name">Hide short content</div>' +
-            '<div class="setting-desc">You will not see vertical videos less than 3 minutes.</div>' +
-            '</div>' +
-            '<button class="focusable btn-setting-toggle ' + (settings.hideShorts ? 'toggle-active' : '') + '" id="toggle-shorts">' +
-            (settings.hideShorts ? 'ON' : 'OFF') +
-            '</button>' +
-            '</div>' +
-
-            '<div class="setting-row">' +
-            '<div class="setting-info">' +
-            '<div class="setting-name">Hide synced YouTube videos</div>' +
-            '<div class="setting-desc">You will not see videos that are synced from YouTube.</div>' +
-            '</div>' +
-            '<button class="focusable btn-setting-toggle ' + (settings.hideYoutube ? 'toggle-active' : '') + '" id="toggle-youtube">' +
-            (settings.hideYoutube ? 'ON' : 'OFF') +
-            '</button>' +
-            '</div>' +
-            '</div>' +
-            '</div>';
-
-        containerEl.innerHTML = html;
-        SpatialNavigation.refresh();
-
-        logoutBtn = document.getElementById('btn-logout');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', function () {
-                Auth.logout(function () {
-                    loadPage('nav-trending');
-                });
-            });
-        }
-
-        setupToggle('toggle-mature', 'hideMature');
-        setupToggle('toggle-shorts', 'hideShorts');
-        setupToggle('toggle-youtube', 'hideYoutube');
-
-        setTimeout(function () {
-            if (logoutBtn) {
-                logoutBtn.focus();
-                SpatialNavigation.refresh();
-                SpatialNavigation.focusNode(logoutBtn);
-            }
-        }, 100);
-    }
-
-    window.isPlaylistDetailOpen = false;
-    window.currentOpenPlaylist = null;
-
-    function renderPlaylistsView(containerEl) {
-        var loadingEl;
-
-        window.isPlaylistDetailOpen = false;
-        window.currentOpenPlaylist = null;
-
-        loadingEl = document.getElementById('loading');
-        if (loadingEl) {
-            loadingEl.style.display = 'block';
-        }
-        containerEl.innerHTML = '';
-
-        SpatialNavigation.refresh();
-
-        UserData.getUserPlaylists(function (err, playlists) {
-            var html;
-            var grid;
-            var i;
-
-            if (loadingEl) {
-                loadingEl.style.display = 'none';
-            }
-
-            if (err) {
-                containerEl.innerHTML = '<div class="playlists-empty">' +
-                    '<h3>Failed to load playlists</h3>' +
-                    '<p>' + (err.message || 'An error occurred.') + '</p>' +
-                    '</div>';
-                SpatialNavigation.refresh();
-                return;
-            }
-
-            if (!playlists || !playlists.length) {
-                containerEl.innerHTML = '<div class="playlists-empty">' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 20px;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>' +
-                    '<h3>No playlists found</h3>' +
-                    '<p>Playlists and Watch Later from your Odysee account will appear here.</p>' +
-                    '</div>';
-                SpatialNavigation.refresh();
-                return;
-            }
-
-            html = '<div class="playlists-container">' +
-                '<div class="playlists-grid" id="playlists-grid"></div>' +
-                '</div>';
-            containerEl.innerHTML = html;
-
-            grid = document.getElementById('playlists-grid');
-            for (i = 0; i < playlists.length; i++) {
-                (function (pl) {
-                    var card = document.createElement('div');
-                    var hasVideo = pl.itemCount > 0 && pl.items && pl.items.length > 0;
-                    var thumbSrc = (hasVideo && pl.thumbnailUrl) ? (Utils.thumbUrl(pl.thumbnailUrl, 400)) : 'icons/missing-thumb.png';
-                    var countText = pl.itemCount + (pl.itemCount === 1 ? ' video' : ' videos');
-                    var badgeText = pl.badge || 'Playlist';
-
-                    card.className = 'playlist-card focusable';
-                    card.tabIndex = 0;
-                    card.setAttribute('data-id', pl.id);
-
-                    card.innerHTML = '<div class="playlist-thumb-wrap">' +
-                        '<img class="playlist-thumb" src="' + Utils.escapeHtml(thumbSrc) + '" onerror="this.src=\'icons/missing-thumb.png\'" />' +
-                        '<div class="playlist-count-badge">' +
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 5px;"><line x1="8" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2"></line><line x1="8" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2"></line><line x1="8" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2"></line><polygon points="3 6 3 18 6 12"></polygon></svg>' +
-                        countText +
-                        '</div>' +
-                        '<div class="playlist-type-pill">' + Utils.escapeHtml(badgeText) + '</div>' +
-                        '</div>' +
-                        '<div class="playlist-info">' +
-                        '<div class="playlist-title">' + Utils.escapeHtml(pl.name) + '</div>' +
-                        '<div class="playlist-subtitle">' + countText + '</div>' +
-                        '</div>';
-
-                    card.addEventListener('click', function () {
-                        openPlaylistDetail(pl, containerEl);
-                    });
-
-                    grid.appendChild(card);
-                }(playlists[i]));
-            }
-
-            SpatialNavigation.refresh();
-            setTimeout(function () {
-                var target;
-                var firstCard;
-                var activeMenu;
-
-                if (lastOpenedPlaylistId) {
-                    target = grid.querySelector('.playlist-card[data-id="' + lastOpenedPlaylistId + '"]');
-                    if (target) {
-                        SpatialNavigation.focusNode(target);
-                        lastOpenedPlaylistId = null;
-                        return;
-                    }
-                }
-                firstCard = grid.querySelector('.playlist-card');
-                if (firstCard) {
-                    SpatialNavigation.focusNode(firstCard);
-                } else {
-                    activeMenu = document.querySelector('.nav-item.active');
-                    if (activeMenu) {
-                        SpatialNavigation.focusNode(activeMenu);
-                    }
-                }
-            }, 100);
-        });
-    }
-
-    function openPlaylistDetail(playlist, containerEl) {
-        window.isPlaylistDetailOpen = true;
-        window.currentOpenPlaylist = playlist;
-        lastOpenedPlaylistId = playlist.id;
-
-        try {
-            history.pushState({ playlistDetail: true }, '', '');
-        } catch (e) { }
-
-        containerEl.innerHTML = '<div class="playlist-detail-container">' +
-            '<div id="playlist-detail-loading" class="loading-spinner" style="display: block;">Loading...</div>' +
-            '<div class="playlist-detail-grid" id="playlist-detail-grid"></div>' +
-            '</div>';
-
-        SpatialNavigation.refresh();
-
-        UserData.getPlaylistVideos(playlist, function (err, res) {
-            var loadingEl = document.getElementById('playlist-detail-loading');
-            var grid;
-            var activeMenu;
-            var i;
-            var card;
-
-            if (loadingEl) {
-                loadingEl.style.display = 'none';
-            }
-
-            grid = document.getElementById('playlist-detail-grid');
-            if (!grid) {
-                return;
-            }
-
-            if (err || !res || !res.items || !res.items.length) {
-                grid.innerHTML = '<div class="playlists-empty">' +
-                    '<h3>No videos in this playlist</h3>' +
-                    '<p>Videos in this playlist will appear here.</p>' +
-                    '</div>';
-                SpatialNavigation.refresh();
-                activeMenu = document.querySelector('.nav-item.active');
-                if (activeMenu) {
-                    SpatialNavigation.focusNode(activeMenu);
-                }
-                return;
-            }
-
-            grid.innerHTML = '';
-            for (i = 0; i < res.items.length; i++) {
-                card = createVideoCard(res.items[i]);
-                if (card) {
-                    grid.appendChild(card);
-                }
-            }
-
-            SpatialNavigation.refresh();
-            setTimeout(function () {
-                var firstCard = grid.querySelector('.video-card');
-                var menuEl;
-
-                if (firstCard) {
-                    SpatialNavigation.focusNode(firstCard);
-                } else {
-                    menuEl = document.querySelector('.nav-item.active');
-                    if (menuEl) {
-                        SpatialNavigation.focusNode(menuEl);
-                    }
-                }
-            }, 100);
-        }, 1);
-    }
-
     function closePlaylistDetail(noRefresh, fromPopstate) {
-        var videoGridEl;
-
-        if (!window.isPlaylistDetailOpen) {
-            return;
-        }
-        window.isPlaylistDetailOpen = false;
-        window.currentOpenPlaylist = null;
-
-        if (!fromPopstate && window.history && history.state && history.state.playlistDetail) {
-            try {
-                history.back();
-            } catch (e) { }
-        }
-
-        if (!noRefresh) {
-            videoGridEl = document.getElementById('video-grid');
-            if (videoGridEl) {
-                renderPlaylistsView(videoGridEl);
-            }
+        if (typeof PlaylistView !== 'undefined') {
+            PlaylistView.closePlaylistDetail(noRefresh, fromPopstate);
         }
     }
+
 
     function loadPage(navId) {
         var cpEl;
@@ -587,7 +211,11 @@ var Feed = (function () {
             SpatialNavigation.unlock();
             searchContainerEl.style.display = 'none';
             loadingEl.style.display = 'none';
-            renderLoginView(videoGridEl);
+            if (typeof AccountView !== 'undefined') {
+                AccountView.renderLogin(videoGridEl, function () {
+                    loadPage('nav-profile');
+                });
+            }
             return;
         }
 
@@ -597,7 +225,11 @@ var Feed = (function () {
             SpatialNavigation.unlock();
             searchContainerEl.style.display = 'none';
             loadingEl.style.display = 'none';
-            renderProfileView(videoGridEl);
+            if (typeof AccountView !== 'undefined') {
+                AccountView.renderProfile(videoGridEl, function () {
+                    loadPage('nav-trending');
+                });
+            }
             return;
         }
 
@@ -607,7 +239,9 @@ var Feed = (function () {
             SpatialNavigation.unlock();
             searchContainerEl.style.display = 'none';
             loadingEl.style.display = 'none';
-            renderPlaylistsView(videoGridEl);
+            if (typeof PlaylistView !== 'undefined') {
+                PlaylistView.renderPlaylistsView(videoGridEl);
+            }
             return;
         }
 
@@ -775,17 +409,7 @@ var Feed = (function () {
         uploadDate = Utils.formatRelativeTime(ts);
 
         duration = claim.value && claim.value.video ? claim.value.video.duration : 0;
-        durationText = '';
-        if (duration > 0) {
-            h = Math.floor(duration / 3600);
-            m = Math.floor((duration % 3600) / 60);
-            s = duration % 60;
-            if (h > 0) {
-                durationText = h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
-            } else {
-                durationText = m + ':' + (s < 10 ? '0' : '') + s;
-            }
-        }
+        durationText = duration > 0 ? Utils.formatDuration(duration) : '';
         durationHtml = durationText ? '<div class="duration-overlay">' + durationText + '</div>' : '';
 
         // Resume progress bar
@@ -868,17 +492,21 @@ var Feed = (function () {
             ev.preventDefault();
             ev.stopPropagation();
 
-            if (ptrIsDown || ptrLongPressed || window._spatialOkLongPressed) {
+            if (ptrIsDown || ptrLongPressed || (SpatialNavigation.isLongPressed && SpatialNavigation.isLongPressed())) {
                 return;
             }
             if (ev.screenX > 0 || ev.screenY > 0) {
                 return;
             }
 
-            if (!window.isChannelPageOpen) {
-                window.lastFocusedCard = cardEl;
+            if (typeof Channel !== 'undefined' && Channel.isOpen()) {
+                if (Channel.setLastFocusedCard) {
+                    Channel.setLastFocusedCard(cardEl);
+                } else {
+                    window.lastFocusedChannelCard = cardEl;
+                }
             } else {
-                window.lastFocusedChannelCard = cardEl;
+                window.lastFocusedCard = cardEl;
             }
             Player.playVideo(claim);
         });
@@ -971,7 +599,11 @@ var Feed = (function () {
         updateCardProgress: updateCardProgress,
         releaseOffscreenThumbs: releaseOffscreenThumbs,
         initSearch: initSearch,
-        renderPlaylistsView: renderPlaylistsView,
+        renderPlaylistsView: function (containerEl) {
+            if (typeof PlaylistView !== 'undefined') {
+                PlaylistView.renderPlaylistsView(containerEl);
+            }
+        },
         closePlaylistDetail: closePlaylistDetail,
         getCurrentCategory: function () {
             return currentCategory;

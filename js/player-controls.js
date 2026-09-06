@@ -280,41 +280,36 @@ var PlayerControls = (function () {
 
     function renderReactions(claim, likes, dislikes, myRx) {
         var metaReactionsEl = document.getElementById('meta-reactions');
-        var isAuth = Auth.isAuthenticated();
+        var isAuth = typeof Auth !== 'undefined' && Auth.isLoggedIn();
         var likeSvg = Icons.get('thumbs-up');
         var dislikeSvg = Icons.get('thumbs-down');
-        var existingLike;
-        var existingDislike;
+        var existingLike = document.getElementById('btn-like');
+        var existingDislike = document.getElementById('btn-dislike');
         var countLikeEl;
         var countDislikeEl;
 
         if (!metaReactionsEl) {
             return;
         }
-        if (isAuth) {
-            existingLike = document.getElementById('btn-like');
-            existingDislike = document.getElementById('btn-dislike');
-            if (existingLike && existingDislike) {
-                countLikeEl = document.getElementById('like-count');
-                countDislikeEl = document.getElementById('dislike-count');
-                if (countLikeEl) {
-                    countLikeEl.textContent = likes || 0;
-                }
-                if (countDislikeEl) {
-                    countDislikeEl.textContent = dislikes || 0;
-                }
-                if (myRx !== undefined) {
-                    existingLike.classList.remove('active-like');
-                    existingDislike.classList.remove('active-dislike');
-                    if (myRx === 'like') {
-                        existingLike.classList.add('active-like');
-                    } else if (myRx === 'dislike') {
-                        existingDislike.classList.add('active-dislike');
-                    }
-                }
-                return;
-            }
 
+        if (existingLike && existingDislike) {
+            countLikeEl = document.getElementById('like-count');
+            countDislikeEl = document.getElementById('dislike-count');
+            if (countLikeEl) {
+                countLikeEl.textContent = likes || 0;
+            }
+            if (countDislikeEl) {
+                countDislikeEl.textContent = dislikes || 0;
+            }
+            existingLike.classList.remove('active-like');
+            existingDislike.classList.remove('active-dislike');
+            if (myRx === 'like') {
+                existingLike.classList.add('active-like');
+            } else if (myRx === 'dislike') {
+                existingDislike.classList.add('active-dislike');
+            }
+            bindReactionButtons(claim);
+        } else {
             metaReactionsEl.innerHTML =
                 '<button class="focusable btn-player-reaction' + (myRx === 'like' ? ' active-like' : '') + '" id="btn-like" title="Like">' +
                 likeSvg + '<span id="like-count">' + (likes || 0) + '</span>' +
@@ -323,30 +318,29 @@ var PlayerControls = (function () {
                 dislikeSvg + '<span id="dislike-count">' + (dislikes || 0) + '</span>' +
                 '</button>';
             bindReactionButtons(claim);
-
-            if (myRx === undefined && claim && claim.claim_id) {
-                UserData.getMyReaction(claim.claim_id, function (err, rx) {
-                    var bLike = document.getElementById('btn-like');
-                    var bDislike = document.getElementById('btn-dislike');
-
-                    if (!bLike || !bDislike) {
-                        return;
-                    }
-                    bLike.classList.remove('active-like');
-                    bDislike.classList.remove('active-dislike');
-                    if (rx === 'like') {
-                        bLike.classList.add('active-like');
-                    } else if (rx === 'dislike') {
-                        bDislike.classList.add('active-dislike');
-                    }
-                });
-            }
-            setTimeout(function () {
-                SpatialNavigation.refresh();
-            }, 100);
-        } else {
-            metaReactionsEl.innerHTML = likeSvg + (likes || 0) + dislikeSvg + (dislikes || 0);
         }
+
+        if (isAuth && myRx === undefined && claim && claim.claim_id) {
+            UserData.getMyReaction(claim.claim_id, function (err, rx) {
+                var bLike = document.getElementById('btn-like');
+                var bDislike = document.getElementById('btn-dislike');
+
+                if (!bLike || !bDislike) {
+                    return;
+                }
+                bLike.classList.remove('active-like');
+                bDislike.classList.remove('active-dislike');
+                if (rx === 'like') {
+                    bLike.classList.add('active-like');
+                } else if (rx === 'dislike') {
+                    bDislike.classList.add('active-dislike');
+                }
+            });
+        }
+
+        setTimeout(function () {
+            SpatialNavigation.refresh();
+        }, 50);
     }
 
     function init() {
@@ -403,6 +397,8 @@ var PlayerControls = (function () {
             var nextCard;
             var shelfState;
             var cards;
+            var upCard;
+            var downCard;
 
             if (!playerContainerEl.classList.contains('hidden')) {
                 e.stopPropagation();
@@ -430,7 +426,7 @@ var PlayerControls = (function () {
                     if (keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
                         e.preventDefault();
                         e.stopPropagation();
-                        history.back();
+                        PlayerComments.close();
                         return;
                     }
                     if (keyCode === 38) {
@@ -452,6 +448,22 @@ var PlayerControls = (function () {
                     return;
                 }
 
+                // Dedicated Back & Stop Keys - Instant Response
+                if (keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009 || keyCode === 413) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof PlayerShelf !== 'undefined' && PlayerShelf.getState() === PlayerShelf.SHELF_STATE.ACTIVE) {
+                        PlayerShelf.setState(PlayerShelf.SHELF_STATE.PEEK);
+                        PlayerShelf.setOpen(false);
+                        PlayerShelf.scrollVertical(0);
+                        setPlayerFocus(playPauseBtn);
+                        scheduleHide(4000);
+                        return;
+                    }
+                    history.back();
+                    return;
+                }
+
                 // Dedicated Hardware Media Keys
                 if (keyCode === 415 || keyCode === 19 || keyCode === 179) {
                     e.preventDefault();
@@ -470,11 +482,6 @@ var PlayerControls = (function () {
                     e.preventDefault();
                     showControls(4000);
                     doSeek(10);
-                    return;
-                }
-                if (keyCode === 413) {
-                    e.preventDefault();
-                    Player.close();
                     return;
                 }
 
@@ -512,6 +519,7 @@ var PlayerControls = (function () {
                     return;
                 }
 
+                // 6. LEFT Arrow (37)
                 if (keyCode === 37) {
                     e.preventDefault();
                     if (wasHidden) {
@@ -533,6 +541,7 @@ var PlayerControls = (function () {
                                 PlayerShelf.scrollCardIntoView(prevCard, curCol - 1);
                             }
                         }
+                        scheduleHide(25000);
                     } else if (focusedBtn === btnComments) {
                         if (btnDislike) {
                             setPlayerFocus(btnDislike);
@@ -541,20 +550,18 @@ var PlayerControls = (function () {
                         } else {
                             setPlayerFocus(playPauseBtn);
                         }
-                    } else if (focusedBtn === btnDislike) {
-                        if (btnLike) {
-                            setPlayerFocus(btnLike);
-                        } else {
-                            setPlayerFocus(playPauseBtn);
-                        }
+                    } else if (focusedBtn === btnDislike && btnLike) {
+                        setPlayerFocus(btnLike);
                     } else if (focusedBtn === btnLike) {
-                        setPlayerFocus(playPauseBtn);
-                    } else if (focusedBtn === playPauseBtn) {
+                        // Leftmost button on top bar, stay on it
+                    } else {
+                        // On play-pause or default: seek backward 10s
                         doSeek(-10);
                     }
                     return;
                 }
 
+                // 7. RIGHT Arrow (39)
                 if (keyCode === 39) {
                     e.preventDefault();
                     if (wasHidden) {
@@ -577,16 +584,7 @@ var PlayerControls = (function () {
                                 PlayerShelf.scrollCardIntoView(nextCard, curCol + 1);
                             }
                         }
-                    } else if (focusedBtn === playPauseBtn) {
-                        if (btnLike) {
-                            setPlayerFocus(btnLike);
-                        } else if (btnDislike) {
-                            setPlayerFocus(btnDislike);
-                        } else if (btnComments) {
-                            setPlayerFocus(btnComments);
-                        } else {
-                            doSeek(10);
-                        }
+                        scheduleHide(25000);
                     } else if (focusedBtn === btnLike) {
                         if (btnDislike) {
                             setPlayerFocus(btnDislike);
@@ -598,11 +596,15 @@ var PlayerControls = (function () {
                             setPlayerFocus(btnComments);
                         }
                     } else if (focusedBtn === btnComments) {
+                        // Rightmost button on top bar, stay on it
+                    } else {
+                        // On play-pause or default: seek forward 10s
                         doSeek(10);
                     }
                     return;
                 }
 
+                // 4. UP Arrow (38)
                 if (keyCode === 38) {
                     e.preventDefault();
                     if (wasHidden) {
@@ -625,8 +627,28 @@ var PlayerControls = (function () {
                                 PlayerShelf.scrollCardIntoView(upCard, Math.min(curCol, cards[0].length - 1));
                             }
                         } else {
+                            // From Shelf 0 (or Shelf 1 if Shelf 0 not present): float back to Peeking state & Play/Pause
+                            if (typeof PlayerShelf !== 'undefined') {
+                                PlayerShelf.setState(PlayerShelf.SHELF_STATE.PEEK);
+                                PlayerShelf.setOpen(false);
+                                PlayerShelf.scrollVertical(0);
+                            }
                             setPlayerFocus(playPauseBtn);
                             scheduleHide(4000);
+                        }
+                    } else if (focusedBtn === playPauseBtn) {
+                        // From play/pause (bottom), move UP to comments first
+                        if (btnComments) {
+                            setPlayerFocus(btnComments);
+                        } else if (btnLike) {
+                            setPlayerFocus(btnLike);
+                        }
+                    } else if (focusedBtn === btnComments) {
+                        // From comments, move UP to reactions row
+                        if (btnDislike) {
+                            setPlayerFocus(btnDislike);
+                        } else if (btnLike) {
+                            setPlayerFocus(btnLike);
                         }
                     } else {
                         showControls(4000);
@@ -634,60 +656,60 @@ var PlayerControls = (function () {
                     return;
                 }
 
+                // 5. DOWN Arrow (40)
                 if (keyCode === 40) {
                     e.preventDefault();
                     if (wasHidden) {
-                        showControls();
-                        return;
+                        showControls(25000);
+                    } else {
+                        scheduleHide(25000);
                     }
-                    scheduleHide();
                     focusedBtn = getPlayerFocusedButton();
                     isRelatedCardFocused = focusedBtn && focusedBtn.classList.contains('related-card');
-                    if (typeof PlayerShelf !== 'undefined') {
-                        shelfState = PlayerShelf.getState();
+                    if (isRelatedCardFocused && typeof PlayerShelf !== 'undefined') {
+                        curShelf = parseInt(focusedBtn.getAttribute('data-shelf'), 10) || 0;
+                        curCol = parseInt(focusedBtn.getAttribute('data-index'), 10) || 0;
                         cards = PlayerShelf.getCards();
-                        if (!isRelatedCardFocused) {
-                            if (shelfState === PlayerShelf.SHELF_STATE.PEEK || shelfState === PlayerShelf.SHELF_STATE.ACTIVE) {
-                                PlayerShelf.setState(PlayerShelf.SHELF_STATE.ACTIVE);
-                                PlayerShelf.setOpen(true);
-                                targetCard = PlayerShelf.getCard(PlayerShelf.getActiveRow(), PlayerShelf.getIndex(PlayerShelf.getActiveRow()));
-                                if (targetCard) {
-                                    setPlayerFocus(targetCard);
-                                    PlayerShelf.scrollCardIntoView(targetCard, PlayerShelf.getIndex(PlayerShelf.getActiveRow()));
-                                    scheduleHide(25000);
-                                    return;
-                                }
+                        if (curShelf === 0 && cards[1] && cards[1].length > 0) {
+                            // On Shelf 0: move DOWN to Shelf 1
+                            PlayerShelf.setActiveRow(1);
+                            PlayerShelf.scrollVertical(1);
+                            downCard = PlayerShelf.getCard(1, Math.min(curCol, cards[1].length - 1));
+                            if (downCard) {
+                                setPlayerFocus(downCard);
+                                PlayerShelf.scrollCardIntoView(downCard, Math.min(curCol, cards[1].length - 1));
                             }
+                            scheduleHide(25000);
+                            return;
+                        }
+                        // On Shelf 1 (bottom-most): absorb DOWN and keep 25s timer
+                        scheduleHide(25000);
+                    } else if (focusedBtn === btnLike || focusedBtn === btnDislike) {
+                        // From reactions, move DOWN to comments row before play/pause
+                        if (btnComments) {
+                            setPlayerFocus(btnComments);
                         } else {
-                            curShelf = parseInt(focusedBtn.getAttribute('data-shelf'), 10) || 0;
-                            curCol = parseInt(focusedBtn.getAttribute('data-index'), 10) || 0;
-                            if (curShelf === 0 && cards[1] && cards[1].length > 0) {
-                                PlayerShelf.setActiveRow(1);
-                                PlayerShelf.scrollVertical(1);
-                                downCard = PlayerShelf.getCard(1, Math.min(curCol, cards[1].length - 1));
-                                if (downCard) {
-                                    setPlayerFocus(downCard);
-                                    PlayerShelf.scrollCardIntoView(downCard, Math.min(curCol, cards[1].length - 1));
-                                }
+                            setPlayerFocus(playPauseBtn);
+                        }
+                    } else if (focusedBtn === btnComments) {
+                        // From comments, move DOWN to play/pause
+                        setPlayerFocus(playPauseBtn);
+                    } else if (focusedBtn === playPauseBtn && typeof PlayerShelf !== 'undefined') {
+                        // From play/pause, move DOWN into shelf
+                        shelfState = PlayerShelf.getState();
+                        if (shelfState === PlayerShelf.SHELF_STATE.PEEK || shelfState === PlayerShelf.SHELF_STATE.ACTIVE) {
+                            PlayerShelf.setState(PlayerShelf.SHELF_STATE.ACTIVE);
+                            PlayerShelf.setOpen(true);
+                            targetCard = PlayerShelf.getCard(PlayerShelf.getActiveRow(), PlayerShelf.getIndex(PlayerShelf.getActiveRow()));
+                            if (targetCard) {
+                                setPlayerFocus(targetCard);
+                                PlayerShelf.scrollCardIntoView(targetCard, PlayerShelf.getIndex(PlayerShelf.getActiveRow()));
                                 scheduleHide(25000);
                                 return;
                             }
                         }
                     }
                     return;
-                }
-
-                if (keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
-                    e.preventDefault();
-                    if (typeof PlayerShelf !== 'undefined' && PlayerShelf.getState() === PlayerShelf.SHELF_STATE.ACTIVE) {
-                        PlayerShelf.setState(PlayerShelf.SHELF_STATE.PEEK);
-                        PlayerShelf.setOpen(false);
-                        PlayerShelf.scrollVertical(0);
-                        setPlayerFocus(playPauseBtn);
-                        scheduleHide(4000);
-                        return;
-                    }
-                    history.back();
                 }
             }
         }, true);

@@ -76,37 +76,7 @@
             <div class="logo">
                 <img src="icons/icon.png" alt="Account" class="logo-img" id="logo-img">
             </div>
-            <ul class="nav-links">
-                <li class="focusable nav-item" data-id="nav-login">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                        style="margin-right: 15px; flex-shrink: 0;">
-                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
-                        <polyline points="10 17 15 12 10 7"></polyline>
-                        <line x1="15" y1="12" x2="3" y2="12"></line>
-                    </svg>
-                    <span>Login</span>
-                </li>
-                <li class="focusable nav-item" data-id="nav-search">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                        style="margin-right: 15px; flex-shrink: 0;">
-                        <circle cx="11" cy="11" r="8" />
-                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                    </svg>
-                    <span>Search</span>
-                </li>
-                <li class="focusable nav-item active" data-id="nav-trending">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 22 22" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                        style="margin-right: 15px; flex-shrink: 0;">
-                        <path
-                            d="M11 3L13.2627 8.73726L19 11L13.2627 13.2627L11 19L8.73726 13.2627L3 11L8.73726 8.73726L11 3Z">
-                        </path>
-                    </svg>
-                    <span>Trending</span>
-                </li>
-            </ul>
+            <ul class="nav-links"></ul>
         </nav>
 
         <!-- Main Content Area -->
@@ -162,7 +132,14 @@
             <div id="player-error" class="player-error"></div>
             <div id="custom-controls" class="custom-controls">
                 <div class="seeker-info-row">
-                    <div id="meta-reactions" class="video-meta meta-left"></div>
+                    <div id="meta-reactions" class="video-meta meta-left">
+                        <button class="focusable btn-player-reaction" id="btn-like" title="Like">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon--Fire" style="vertical-align: middle; margin-right: 6px;"><path d="M15.45 22.65C17.25 16.65 12.15 12.75 12.15 12.75C12.15 12.75 9.00001 18.15 9.60001 22.65C7.20001 21.45 5.55001 19.8 4.80001 17.7C3.60001 14.55 4.50001 11.1 5.25001 9C5.85001 10.2 7.80001 12.15 7.80001 12.15L7.95001 10.5C8.55001 2.25 12.6 0.9 14.4 0.75C14.4 1.8 14.7 4.8 17.1 7.95C18.75 10.05 20.55 12.45 20.4 16.5C20.1 20.1 17.4 21.9 15.45 22.65Z" stroke-miterlimit="10"></path></svg><span id="like-count">0</span>
+                        </button>
+                        <button class="focusable btn-player-reaction" id="btn-dislike" title="Dislike">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon--Slime" style="vertical-align: middle; margin-right: 6px;"><path d="M5.09998 23.25C2.84998 23.25 1.64998 20.55 3.14998 18.9C4.19998 17.85 8.24998 17.1 7.04998 14.7C6.14998 12.9 3.59998 15.75 2.09998 15C1.34998 14.7 1.19998 13.5 1.79998 12.75C2.39998 11.85 3.29998 12 4.19998 12.15C5.84998 12.45 7.94998 11.7 7.49998 9.60003C6.89998 7.35003 4.34998 6.45003 3.44998 4.35003C2.69998 2.25003 4.64998 -0.299968 6.89998 1.05003C8.69998 2.10003 8.39997 5.25003 9.29997 6.90003C10.2 8.40003 12 9.00003 13.2 7.65003C14.55 6.30003 14.55 3.15003 16.65 2.70003C18.45 2.25003 20.4 4.05003 19.5 5.85003C18.45 7.80003 15.15 7.80003 14.55 10.05C14.1 11.7 15.45 11.85 16.65 11.4C17.4 11.1 18.6 10.35 19.5 10.65C20.55 11.1 20.7 12.45 19.95 13.2C18.6 14.25 16.65 12.6 15.45 14.25C13.95 16.35 17.1 17.7 18.15 18.9C19.8 20.7 18.3 22.8 16.05 22.8C14.1 22.8 13.65 20.7 13.2 19.05C12.6 16.95 9.89997 15.3 8.54997 18C7.79997 19.8 8.24998 23.25 5.09998 23.25Z" stroke-miterlimit="10"></path></svg><span id="dislike-count">0</span>
+                        </button>
+                    </div>
                     <div class="time-container meta-right">
                         <span id="time-display" class="time-display">00:00 / 00:00</span>
                     </div>
@@ -177,7 +154,7 @@
                     <div class="video-meta meta-right">
                         <span id="meta-views"></span>
                         <button class="focusable btn-player-comments" id="btn-comments" title="Comments">
-                            <span id="comments-icon" class="comments-icon"></span>
+                            <span id="comments-icon" class="comments-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
                             <span id="comments-count">0</span>
                         </button>
                     </div>
@@ -225,7 +202,7 @@
         // Only needed if the app runs from file:// (as an installed app).
         // If loading from the dev server (http://<ip>:3000/), leave this commented out:
         // devlog.js will automatically send logs to the load origin.
-        // window.DEVLOG_HOST = "192.168.0.172:5000";
+        window.DEVLOG_HOST = "192.168.0.172:5000";
     </script>
     <script src="js/devlog.js"></script>
 
@@ -241,6 +218,8 @@
     <script src="js/comments.js"></script>
     <script src="js/api.js"></script>
     <script src="js/navigation.js"></script>
+    <script src="js/account-view.js"></script>
+    <script src="js/playlist-view.js"></script>
     <script src="js/feed.js"></script>
     <script src="js/channel.js"></script>
     <script src="js/player-comments.js"></script>

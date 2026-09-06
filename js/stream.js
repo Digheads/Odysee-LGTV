@@ -4,10 +4,6 @@
 // ---------------------------------------------------------------------------
 
 var StreamResolver = (function () {
-    // Setting this to true reverts to the v4 format (without extension).
-    // Default is false (/v6/ .mp4) for webOS 2.0 pipeline compatibility.
-    var USE_V4_HLS = false;
-
     // Cache for pre-warmed playable URLs with magic timestamp per claimId
     // magic=<unix_ts> is valid for 300 seconds on player.odycdn.com
     var magicCache = {};
@@ -125,11 +121,8 @@ var StreamResolver = (function () {
         }
 
         if (name && cid && sd) {
-            u = USE_V4_HLS ?
-                'http://player.odycdn.com/api/v4/streams/free/' +
-                encodeURIComponent(name) + '/' + cid + '/' + sd.substring(0, 6) :
-                'http://player.odycdn.com/v6/streams/' + cid + '/' + sd.substring(0, 6) + '.mp4';
-            console.log('StreamResolver: stream URL (' + (USE_V4_HLS ? 'v4' : 'v6') + '): ' + u);
+            u = buildMp4Url(claim);
+            console.log('StreamResolver: stream URL (v6): ' + u);
             return cb(null, u);
         }
 
