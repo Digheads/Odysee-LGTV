@@ -29,7 +29,7 @@ var MIME = {
     ".svg": "image/svg+xml"
 };
 
-var E = "[",
+var E = "\x1b[",
     C = {
         reset: E + "0m",
         dim: E + "2m",
@@ -59,11 +59,21 @@ function colorize(level, msg) {
     return msg;
 }
 
-function cors(res) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+function cors(res, req) {
+    var origin = (req && req.headers && req.headers.origin) ? req.headers.origin : "*";
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD");
+    var reqHeaders = (req && req.headers && req.headers["access-control-request-headers"]) ?
+        req.headers["access-control-request-headers"] : "*";
+    res.setHeader("Access-Control-Allow-Headers", reqHeaders);
+    res.setHeader("Access-Control-Expose-Headers", "*");
     res.setHeader("Access-Control-Max-Age", "86400");
+    if (req && req.headers && req.headers.origin) {
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+    if (req && req.headers && req.headers["access-control-request-private-network"]) {
+        res.setHeader("Access-Control-Allow-Private-Network", "true");
+    }
 }
 
 function handleLog(req, res) {
@@ -88,13 +98,14 @@ function handleLog(req, res) {
             out.push(line);
         });
         fs.appendFile(LOGFILE, out.join("\n") + "\n", function () { });
-        cors(res);
+        cors(res, req);
         res.writeHead(204);
         res.end();
     });
 }
 
 function serveStatic(req, res, urlPath) {
+    cors(res, req);
     var rel = decodeURIComponent(urlPath.split("?")[0]);
     if (rel === "/") rel = "/index.html";
     var file = path.join(ROOT, path.normalize(rel).replace(/^(\.\.[\/\\])+/, ""));
@@ -107,7 +118,7 @@ function serveStatic(req, res, urlPath) {
             res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
             return res.end("404 " + rel);
         }
-        cors(res);
+        cors(res, req);
         res.writeHead(200, {
             "Content-Type": MIME[path.extname(file).toLowerCase()] || "application/octet-stream",
             // The TV caches aggressively; this is in the way during development.
@@ -118,15 +129,14 @@ function serveStatic(req, res, urlPath) {
 }
 
 http.createServer(function (req, res) {
+    cors(res, req);
     if (req.method === "OPTIONS") {
-        cors(res);
         res.writeHead(204);
         return res.end();
     }
     var p = req.url.split("?")[0];
     if (p === "/log" && req.method === "POST") return handleLog(req, res);
     if (p === "/ping") {
-        cors(res);
         res.writeHead(200, { "Content-Type": "text/plain" });
         return res.end("ok");
     }
