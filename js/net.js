@@ -84,7 +84,7 @@ var LbryNet = (function () {
         ensureAuthToken: function (cb) {
             var xhr;
 
-            if (window.Auth && typeof Auth.getInternalAuthToken === 'function' && Auth.getInternalAuthToken()) {
+            if (Auth.getInternalAuthToken()) {
                 return cb(Auth.getInternalAuthToken());
             }
             if (window.odyseeAuthToken) {
@@ -158,11 +158,11 @@ var LbryRpc = (function () {
         xhr.open('POST', url, true);
         xhr.setRequestHeader('Content-Type', 'application/json-rpc');
 
-        if (window.Auth && typeof Auth.getAccessToken === 'function' && Auth.getAccessToken()) {
+        if (Auth.getAccessToken()) {
             xhr.setRequestHeader('Authorization', 'Bearer ' + Auth.getAccessToken());
         }
 
-        internalToken = (window.Auth && typeof Auth.getInternalAuthToken === 'function' && Auth.getInternalAuthToken()) || window.odyseeAuthToken;
+        internalToken = Auth.getInternalAuthToken() || window.odyseeAuthToken;
         if (internalToken) {
             xhr.setRequestHeader('X-Lbry-Auth-Token', internalToken);
         }
@@ -232,7 +232,7 @@ var LbryIo = (function () {
         url = (path.indexOf('http') === 0 ? path : BASE_URL + (path.charAt(0) === '/' ? path : '/' + path));
 
         // Auto-attach auth_token if available and not already provided
-        token = (window.Auth && typeof Auth.getInternalAuthToken === 'function' && Auth.getInternalAuthToken()) || window.odyseeAuthToken;
+        token = Auth.getInternalAuthToken() || window.odyseeAuthToken;
         if (token && options.data && typeof options.data === 'object' && !options.data.auth_token) {
             options.data.auth_token = token;
         }
@@ -273,7 +273,7 @@ var LbryIo = (function () {
 
         // Only attach Bearer token for /user/me or if explicitly requested,
         // because sending expired Bearer tokens breaks api.odysee.com OIDC middleware.
-        if ((path === '/user/me' || options.useBearer === true) && window.Auth && typeof Auth.getAccessToken === 'function' && Auth.getAccessToken()) {
+        if ((path === '/user/me' || options.useBearer === true) && Auth.getAccessToken()) {
             xhr.setRequestHeader('Authorization', 'Bearer ' + Auth.getAccessToken());
         }
 

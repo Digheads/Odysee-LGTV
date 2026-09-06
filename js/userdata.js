@@ -326,7 +326,7 @@ var UserData = (function () {
         cachedRemoteWatchLaterIds = list;
 
         // Sync to Odysee cloud preferences if logged in
-        if (window.Auth && Auth.isLoggedIn()) {
+        if (Auth.isLoggedIn()) {
             LbryNet.ensureAuthToken(function (token) {
                 function syncToCloud(shared) {
                     var targetBuiltIn;
@@ -453,7 +453,7 @@ var UserData = (function () {
     }
 
     function fetchRemoteWatchLater(callback) {
-        if (!window.Auth || !Auth.isLoggedIn()) {
+        if (!Auth.isLoggedIn()) {
             cachedRemoteWatchLaterIds = [];
             return callback(null, []);
         }
@@ -568,7 +568,7 @@ var UserData = (function () {
     // -----------------------------------------------------------------------
 
     function getUserPlaylists(callback) {
-        if (!window.Auth || !Auth.isLoggedIn()) {
+        if (!Auth.isLoggedIn()) {
             return callback(null, []);
         }
 
@@ -724,8 +724,8 @@ var UserData = (function () {
                 }
 
                 // 4. Also fetch any public channel collections
-                channelIds = (typeof Auth.getChannelClaimIds === 'function') ? Auth.getChannelClaimIds() : [];
-                u = Auth.getUser ? Auth.getUser() : null;
+                channelIds = Auth.getChannelClaimIds() || [];
+                u = Auth.getUser();
                 if (u && u.channelClaimId && channelIds.indexOf(u.channelClaimId) === -1) {
                     channelIds.push(u.channelClaimId);
                 }
@@ -840,18 +840,16 @@ var UserData = (function () {
         });
     }
 
-    if (window.Auth && typeof Auth.onAuthStateChanged === 'function') {
-        Auth.onAuthStateChanged(function (isLoggedIn) {
-            if (!isLoggedIn) {
-                cachedRemoteWatchLaterIds = null;
-                cachedSharedPreferences = null;
-                cachedFollowedChannels = null;
-            } else {
-                cachedFollowedChannels = null;
-                getFollowedChannels(function () {});
-            }
-        });
-    }
+    Auth.onAuthStateChanged(function (isLoggedIn) {
+        if (!isLoggedIn) {
+            cachedRemoteWatchLaterIds = null;
+            cachedSharedPreferences = null;
+            cachedFollowedChannels = null;
+        } else {
+            cachedFollowedChannels = null;
+            getFollowedChannels(function () {});
+        }
+    });
 
     // -----------------------------------------------------------------------
     // Followed Channels & Following Feed
@@ -936,7 +934,7 @@ var UserData = (function () {
             }, 3500);
 
             // A) /subscription/list via internal API
-            if (token || (window.Auth && Auth.getAccessToken())) {
+            if (token || Auth.getAccessToken()) {
                 data = {};
                 if (token) {
                     data.auth_token = token;
@@ -1057,7 +1055,7 @@ var UserData = (function () {
         LbryNet.ensureAuthToken(function (token) {
             var data;
 
-            if (!token && (!window.Auth || !Auth.getAccessToken())) {
+            if (!token && !Auth.getAccessToken()) {
                 if (callback) {
                     callback(new Error('No auth token available'));
                 }
@@ -1156,7 +1154,7 @@ var UserData = (function () {
         LbryNet.ensureAuthToken(function (token) {
             var data;
 
-            if (!token && (!window.Auth || !Auth.getAccessToken())) {
+            if (!token && !Auth.getAccessToken()) {
                 if (callback) {
                     callback(new Error('No auth token available'));
                 }

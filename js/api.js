@@ -110,17 +110,16 @@ var OdyseeAPI = (function () {
             var notTags;
             var hasMemberships;
 
-            settings = (window.Auth && typeof Auth.getSettings === 'function') ?
-                Auth.getSettings() : {
-                    hideMature: true,
-                    hideShorts: true,
-                    hideYoutube: false
-                };
+            settings = Auth.getSettings() || {
+                hideMature: true,
+                hideShorts: true,
+                hideYoutube: false
+            };
 
             notTags = ['c:unlisted', 'c:scheduled:show', 'c:scheduled:hide'];
 
             // Exclude members-only/rentals at API level ONLY if user has no memberships/purchases
-            hasMemberships = window.Auth && typeof Auth.hasAnyMembershipsOrPurchases === 'function' && Auth.hasAnyMembershipsOrPurchases();
+            hasMemberships = Auth.hasAnyMembershipsOrPurchases();
             if (!hasMemberships) {
                 notTags.push('c:members-only', 'c:rental', 'c:purchase');
             }
@@ -186,12 +185,11 @@ var OdyseeAPI = (function () {
             var url;
 
             console.log('OdyseeAPI: Searching lighthouse for: ' + query);
-            settings = (window.Auth && typeof Auth.getSettings === 'function') ?
-                Auth.getSettings() : {
-                    hideMature: true,
-                    hideShorts: true,
-                    hideYoutube: false
-                };
+            settings = Auth.getSettings() || {
+                hideMature: true,
+                hideShorts: true,
+                hideYoutube: false
+            };
 
             xhr = new XMLHttpRequest();
             url = 'https://lighthouse.odysee.tv/search?s=' + encodeURIComponent(query) +
@@ -435,98 +433,6 @@ var OdyseeAPI = (function () {
                     finish();
                 }
             }));
-        },
-
-        // -------------------------------------------------------------------
-        // Backward-Compatibility Facade (delegates to focused modules)
-        // -------------------------------------------------------------------
-
-        syncServerTime: function (cb) {
-            return LbryNet.syncServerTime(cb);
-        },
-        getServerNowSec: function () {
-            return LbryNet.getServerNowSec();
-        },
-        ensureAuthToken: function (cb) {
-            return LbryNet.ensureAuthToken(cb);
-        },
-
-        buildHlsUrl: function (claim) {
-            return StreamResolver.buildHlsUrl(claim);
-        },
-        buildMp4Url: function (claim) {
-            return StreamResolver.buildMp4Url(claim);
-        },
-        getStreamingSourceUrl: function (claim, cb) {
-            return StreamResolver.getStreamingSourceUrl(claim, cb);
-        },
-        getCachedMagicUrl: function (claimId) {
-            return StreamResolver.getCachedMagicUrl(claimId);
-        },
-        setCachedMagicUrl: function (claimId, url, createdAtSec) {
-            return StreamResolver.setCachedMagicUrl(claimId, url, createdAtSec);
-        },
-        clearCachedMagicUrl: function (claimId) {
-            return StreamResolver.clearCachedMagicUrl(claimId);
-        },
-        reportWatchmanPlayback: function (url, duration, pos, relPos, rebufCount, rebufDur) {
-            return StreamResolver.reportWatchmanPlayback(url, duration, pos, relPos, rebufCount, rebufDur);
-        },
-
-        protectedReason: function (claim) {
-            return ClaimFilter.protectedReason(claim);
-        },
-        filterPlayable: function (cb) {
-            return ClaimFilter.filterPlayable(cb);
-        },
-
-        getReactions: function (claimId, cb) {
-            return UserData.getReactions(claimId, cb);
-        },
-        getMyReaction: function (claimId, cb) {
-            return UserData.getMyReaction(claimId, cb);
-        },
-        getCachedReactions: function (claimId) {
-            return UserData.getCachedReactions ? UserData.getCachedReactions(claimId) : null;
-        },
-        react: function (claimId, type, remove, cb) {
-            return UserData.react(claimId, type, remove, cb);
-        },
-        getViewCount: function (claimId, cb) {
-            return UserData.getViewCount(claimId, cb);
-        },
-        saveViewProgress: function (claimId, uri, time) {
-            return UserData.saveViewProgress(claimId, uri, time);
-        },
-        getResumePoint: function (claimId) {
-            return UserData.getResumePoint(claimId);
-        },
-        saveResumePoint: function (claimId, time, duration) {
-            return UserData.saveResumePoint(claimId, time, duration);
-        },
-        getWatchLaterIds: function () {
-            return UserData.getWatchLaterIds();
-        },
-        saveWatchLater: function (claimId, add) {
-            return UserData.saveWatchLater(claimId, add);
-        },
-        isWatchLater: function (claimId) {
-            return UserData.isWatchLater(claimId);
-        },
-        getWatchLaterVideos: function (cb, page) {
-            return UserData.getWatchLaterVideos(cb, page);
-        },
-        getPlaylists: function (cb) {
-            return UserData.getUserPlaylists(cb);
-        },
-        getPlaylistVideos: function (playlist, cb, page) {
-            return UserData.getPlaylistVideos(playlist, cb, page);
-        },
-        getFollowedChannels: function (cb) {
-            return UserData.getFollowedChannels(cb);
-        },
-        getFollowingVideos: function (cb, page) {
-            return UserData.getFollowingVideos(cb, page);
         }
     };
 }());

@@ -9,21 +9,16 @@ var ClaimFilter = (function () {
     function hasAccessToClaim(claimId, channelId) {
         var myChannels;
 
-        if (!window.Auth) {
-            return false;
-        }
-        if (typeof Auth.hasPurchased === 'function' && Auth.hasPurchased(claimId)) {
+        if (Auth.hasPurchased(claimId)) {
             return true;
         }
         if (channelId) {
-            if (typeof Auth.isMemberOf === 'function' && Auth.isMemberOf(channelId)) {
+            if (Auth.isMemberOf(channelId)) {
                 return true;
             }
-            if (typeof Auth.getChannelClaimIds === 'function') {
-                myChannels = Auth.getChannelClaimIds();
-                if (myChannels && myChannels.indexOf(channelId) > -1) {
-                    return true;
-                }
+            myChannels = Auth.getChannelClaimIds();
+            if (myChannels && myChannels.indexOf(channelId) > -1) {
+                return true;
             }
         }
         return false;
@@ -58,17 +53,15 @@ var ClaimFilter = (function () {
         channelTags = (claim.signing_channel && claim.signing_channel.value && claim.signing_channel.value.tags) ?
             claim.signing_channel.value.tags : [];
         releaseTime = (claim.value && claim.value.release_time) ? +claim.value.release_time : 0;
-        nowSec = (window.LbryNet && typeof LbryNet.getServerNowSec === 'function') ?
-            LbryNet.getServerNowSec() : Math.floor(new Date().getTime() / 1000);
+        nowSec = LbryNet.getServerNowSec();
         claimId = claim.claim_id || '';
         channelId = claim.signing_channel ? claim.signing_channel.claim_id : (claim.channel_id || '');
 
-        settings = (window.Auth && typeof Auth.getSettings === 'function') ?
-            Auth.getSettings() : {
-                hideMature: true,
-                hideShorts: true,
-                hideYoutube: false
-            };
+        settings = Auth.getSettings() || {
+            hideMature: true,
+            hideShorts: true,
+            hideYoutube: false
+        };
 
         // 1. Mature content check
         if (settings.hideMature) {

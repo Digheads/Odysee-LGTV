@@ -53,16 +53,14 @@ document.addEventListener('DOMContentLoaded', function () {
     SpatialNavigation.init();
     SpatialNavigation.lock();
 
-    if (SpatialNavigation.clearFocus) {
-        SpatialNavigation.clearFocus();
-    }
+    SpatialNavigation.clearFocus();
 
     // Safety fallback: unlock navigation after 15s in case network stalls
     setTimeout(function () {
         var focused;
         var activeMenu;
 
-        if (SpatialNavigation.isLocked && SpatialNavigation.isLocked()) {
+        if (SpatialNavigation.isLocked()) {
             console.warn('Safety fallback: unlocking SpatialNavigation');
             SpatialNavigation.unlock();
             SpatialNavigation.refresh();
@@ -78,29 +76,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Clock sync first, load only afterwards: otherwise the `magic` parameter
     // would be invalid with a drifted TV clock and we'd get 401.
-    if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === 'function') {
-        OdyseeAPI.syncServerTime(function () {
-            function proceed() {
-                OdyseeAPI.getSections(function (err, sections) {
-                    if (err) {
-                        console.error('Failed to load categories: ' + err.message);
-                    }
-                    Navigation.buildNav(sections || []);
-                    SpatialNavigation.refresh();
-                    Feed.loadPage('nav-trending');
-                });
-            }
-
-            if (window.Auth && typeof Auth.init === 'function') {
-                Auth.init(function (isLoggedIn) {
-                    console.log('App bootstrap: Auth initialized, loggedIn=' + isLoggedIn);
-                    proceed();
-                });
-            } else {
-                proceed();
-            }
+    LbryNet.syncServerTime(function () {
+        Auth.init(function (isLoggedIn) {
+            console.log('App bootstrap: Auth initialized, loggedIn=' + isLoggedIn);
+            OdyseeAPI.getSections(function (err, sections) {
+                if (err) {
+                    console.error('Failed to load categories: ' + err.message);
+                }
+                Navigation.buildNav(sections || []);
+                SpatialNavigation.refresh();
+                Feed.loadPage('nav-trending');
+            });
         });
-    }
+    });
 
     Navigation.bindNav();
     Feed.initSearch();
@@ -132,15 +120,13 @@ document.addEventListener('DOMContentLoaded', function () {
         var playerEl = document.getElementById('player-container');
 
         if (playerEl && !playerEl.classList.contains('hidden')) {
-            if (window.Player && typeof Player.isCommentsOpen === 'function' && Player.isCommentsOpen()) {
+            if (Player.isCommentsOpen()) {
                 Player.closeComments();
             } else {
                 Player.close();
             }
         } else if (window.isPlaylistDetailOpen) {
-            if (window.Feed && typeof Feed.closePlaylistDetail === 'function') {
-                Feed.closePlaylistDetail(false, true);
-            }
+            Feed.closePlaylistDetail(false, true);
         } else if (window.isChannelPageOpen) {
             Channel.close();
         }
@@ -157,9 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (keyCode === 413 || keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (window.Feed && typeof Feed.closePlaylistDetail === 'function') {
-                    Feed.closePlaylistDetail();
-                }
+                Feed.closePlaylistDetail();
                 return;
             }
         }

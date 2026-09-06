@@ -55,10 +55,10 @@ var Feed = (function () {
             return OdyseeAPI.getTrending(cb, page);
         }
         if (id === 'nav-following') {
-            return OdyseeAPI.getFollowingVideos(cb, page);
+            return UserData.getFollowingVideos(cb, page);
         }
         if (id === 'nav-watch-later') {
-            return OdyseeAPI.getWatchLaterVideos(cb, page);
+            return UserData.getWatchLaterVideos(cb, page);
         }
         if (id === 'nav-search') {
             return OdyseeAPI.search(currentSearchQuery, cb, page);
@@ -84,9 +84,8 @@ var Feed = (function () {
 
         SpatialNavigation.refresh();
 
-        if (window.Auth && typeof Auth.startDeviceFlow === 'function') {
-            Auth.startDeviceFlow(
-                function (info) {
+        Auth.startDeviceFlow(
+            function (info) {
                     var codeBox = document.getElementById('login-code-box');
                     var refreshBtn = document.getElementById('btn-login-refresh');
 
@@ -124,21 +123,20 @@ var Feed = (function () {
                 }
             );
         }
-    }
 
     function renderProfileView(containerEl) {
-        var user = (window.Auth && Auth.getUser) ? Auth.getUser() : {};
-        var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : {
+        var user = Auth.getUser() || {};
+        var settings = Auth.getSettings() || {
             hideMature: true,
             hideShorts: true,
             hideYoutube: false
         };
 
-        var rawAvatar = (window.Auth && Auth.getAvatarUrl) ? Auth.getAvatarUrl() : (user.avatarUrl || 'icons/spaceman.png');
-        var avatarSrc = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatar, 160) : rawAvatar;
+        var rawAvatar = Auth.getAvatarUrl() || (user.avatarUrl || 'icons/spaceman.png');
+        var avatarSrc = Utils.getAvatarSrc(rawAvatar, 160);
         var isSpaceman = (!avatarSrc || avatarSrc === 'icons/spaceman.png');
         var chName = user ? (user.channelName || '') : '';
-        var avatarColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : 'transparent';
+        var avatarColor = isSpaceman ? Utils.getAvatarColor(chName) : 'transparent';
 
         var displayName = user.channelName || (user.email ? user.email.split('@')[0] : 'Odysee User');
         var emailDisplay = user.email || '';
@@ -161,9 +159,7 @@ var Feed = (function () {
                 var nextVal = !currentVal;
 
                 settings[settingKey] = nextVal;
-                if (window.Auth && Auth.updateSetting) {
-                    Auth.updateSetting(settingKey, nextVal);
-                }
+                Auth.updateSetting(settingKey, nextVal);
                 btn.textContent = nextVal ? 'ON' : 'OFF';
                 if (nextVal) {
                     btn.classList.add('toggle-active');
@@ -183,8 +179,8 @@ var Feed = (function () {
             '<img src="' + avatarSrc + '" class="profile-avatar-img"' + imgStyle + ' alt="Avatar" onerror="this.src=\'icons/spaceman.png\'">' +
             '</div>' +
             '<div class="profile-meta-wrap">' +
-            '<div class="profile-display-name">' + (window.Utils && Utils.escapeHtml ? Utils.escapeHtml(displayName) : displayName) + '</div>' +
-            (emailDisplay ? '<div class="profile-email">' + (window.Utils && Utils.escapeHtml ? Utils.escapeHtml(emailDisplay) : emailDisplay) + '</div>' : '') +
+            '<div class="profile-display-name">' + Utils.escapeHtml(displayName) + '</div>' +
+            (emailDisplay ? '<div class="profile-email">' + Utils.escapeHtml(emailDisplay) + '</div>' : '') +
             '<div class="profile-followers-badge">' + followersText + '</div>' +
             '</div>' +
             '<div class="profile-header-actions">' +
@@ -233,11 +229,9 @@ var Feed = (function () {
         logoutBtn = document.getElementById('btn-logout');
         if (logoutBtn) {
             logoutBtn.addEventListener('click', function () {
-                if (window.Auth && Auth.logout) {
-                    Auth.logout(function () {
-                        loadPage('nav-trending');
-                    });
-                }
+                Auth.logout(function () {
+                    loadPage('nav-trending');
+                });
             });
         }
 
@@ -248,10 +242,8 @@ var Feed = (function () {
         setTimeout(function () {
             if (logoutBtn) {
                 logoutBtn.focus();
-                if (window.SpatialNavigation && typeof SpatialNavigation.focusNode === 'function') {
-                    SpatialNavigation.refresh();
-                    SpatialNavigation.focusNode(logoutBtn);
-                }
+                SpatialNavigation.refresh();
+                SpatialNavigation.focusNode(logoutBtn);
             }
         }, 100);
     }
@@ -273,9 +265,8 @@ var Feed = (function () {
 
         SpatialNavigation.refresh();
 
-        if (window.OdyseeAPI && typeof OdyseeAPI.getPlaylists === 'function') {
-            OdyseeAPI.getPlaylists(function (err, playlists) {
-                var html;
+        UserData.getUserPlaylists(function (err, playlists) {
+            var html;
                 var grid;
                 var i;
 
@@ -366,7 +357,6 @@ var Feed = (function () {
                     }
                 }, 100);
             });
-        }
     }
 
     function openPlaylistDetail(playlist, containerEl) {
@@ -385,9 +375,8 @@ var Feed = (function () {
 
         SpatialNavigation.refresh();
 
-        if (window.OdyseeAPI && typeof OdyseeAPI.getPlaylistVideos === 'function') {
-            OdyseeAPI.getPlaylistVideos(playlist, function (err, res) {
-                var loadingEl = document.getElementById('playlist-detail-loading');
+        UserData.getPlaylistVideos(playlist, function (err, res) {
+            var loadingEl = document.getElementById('playlist-detail-loading');
                 var grid;
                 var activeMenu;
                 var i;
@@ -438,7 +427,6 @@ var Feed = (function () {
                     }
                 }, 100);
             }, 1);
-        }
     }
 
     function closePlaylistDetail(noRefresh, fromPopstate) {
@@ -486,14 +474,12 @@ var Feed = (function () {
                 msg = err.message || (typeof err === 'string' ? err : JSON.stringify(err));
                 videoGridEl.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. ' + msg + '</div>';
                 console.error(err);
-                if (window.SpatialNavigation) {
-                    SpatialNavigation.refresh();
-                    activeMenu = document.querySelector('.nav-item.active');
-                    if (activeMenu) {
-                        SpatialNavigation.focusNode(activeMenu);
-                    }
-                    SpatialNavigation.unlock();
+                SpatialNavigation.refresh();
+                activeMenu = document.querySelector('.nav-item.active');
+                if (activeMenu) {
+                    SpatialNavigation.focusNode(activeMenu);
                 }
+                SpatialNavigation.unlock();
                 return;
             }
             if (res && res.items && res.items.length > 0) {
@@ -516,31 +502,23 @@ var Feed = (function () {
                         '</div>';
                 }
             }
-            if (window.SpatialNavigation) {
-                SpatialNavigation.refresh();
-                if (currentPage === 1) {
-                    firstVideo = videoGridEl.querySelector('.video-card');
-                    if (firstVideo) {
-                        SpatialNavigation.focusNode(firstVideo);
-                    } else {
-                        activeMenu = document.querySelector('.nav-item.active');
-                        if (activeMenu) {
-                            SpatialNavigation.focusNode(activeMenu);
-                        }
+            SpatialNavigation.refresh();
+            if (currentPage === 1) {
+                firstVideo = videoGridEl.querySelector('.video-card');
+                if (firstVideo) {
+                    SpatialNavigation.focusNode(firstVideo);
+                } else {
+                    activeMenu = document.querySelector('.nav-item.active');
+                    if (activeMenu) {
+                        SpatialNavigation.focusNode(activeMenu);
                     }
-                    isAppStartup = false;
                 }
-                SpatialNavigation.unlock();
+                isAppStartup = false;
             }
+            SpatialNavigation.unlock();
         }
 
-        if (typeof Channel !== 'undefined' && Channel && typeof Channel.close === 'function') {
-            Channel.close(true);
-        } else if (window.Channel && typeof window.Channel.close === 'function') {
-            window.Channel.close(true);
-        } else if (typeof window.closeChannelPage === 'function') {
-            window.closeChannelPage(true);
-        }
+        Channel.close(true);
         window.isChannelPageOpen = false;
 
         cpEl = document.getElementById('channel-page');
@@ -583,22 +561,15 @@ var Feed = (function () {
         hasMore = true;
         isLoading = true;
 
-        if (window.Navigation && typeof Navigation.setActive === 'function') {
-            Navigation.setActive(navId);
-        }
-
-        if (window.SpatialNavigation && typeof SpatialNavigation.lock === 'function') {
-            SpatialNavigation.lock();
-        }
+        Navigation.setActive(navId);
+        SpatialNavigation.lock();
 
         videoGridEl.innerHTML = '';
         loadingEl.style.display = 'block';
 
         if (navId === 'nav-search') {
             isLoading = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
-                SpatialNavigation.unlock();
-            }
+            SpatialNavigation.unlock();
             Utils.setDisplayFlex(searchContainerEl);
             loadingEl.style.display = 'none';
             SpatialNavigation.refresh();
@@ -613,9 +584,7 @@ var Feed = (function () {
         if (navId === 'nav-login') {
             isLoading = false;
             hasMore = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
-                SpatialNavigation.unlock();
-            }
+            SpatialNavigation.unlock();
             searchContainerEl.style.display = 'none';
             loadingEl.style.display = 'none';
             renderLoginView(videoGridEl);
@@ -625,9 +594,7 @@ var Feed = (function () {
         if (navId === 'nav-profile') {
             isLoading = false;
             hasMore = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
-                SpatialNavigation.unlock();
-            }
+            SpatialNavigation.unlock();
             searchContainerEl.style.display = 'none';
             loadingEl.style.display = 'none';
             renderProfileView(videoGridEl);
@@ -637,9 +604,7 @@ var Feed = (function () {
         if (navId === 'nav-playlists') {
             isLoading = false;
             hasMore = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
-                SpatialNavigation.unlock();
-            }
+            SpatialNavigation.unlock();
             searchContainerEl.style.display = 'none';
             loadingEl.style.display = 'none';
             renderPlaylistsView(videoGridEl);
@@ -754,22 +719,6 @@ var Feed = (function () {
         dispatchLoad(currentCategory, currentPage, appendCards);
     }
 
-    function triggerPlayVideo(claim) {
-        if (window.Player && typeof Player.playVideo === 'function') {
-            Player.playVideo(claim);
-        } else if (typeof playVideo === 'function') {
-            playVideo(claim);
-        }
-    }
-
-    function triggerOpenChannel(channel) {
-        if (window.Channel && typeof Channel.open === 'function') {
-            Channel.open(channel);
-        } else if (typeof window.openChannelPage === 'function') {
-            window.openChannelPage(channel);
-        }
-    }
-
     function createVideoCard(claim) {
         var title;
         var thumb;
@@ -805,7 +754,7 @@ var Feed = (function () {
                 }
                 if (!ptrLongPressed) {
                     window.lastFocusedCard = cardEl;
-                    triggerPlayVideo(claim);
+                    Player.playVideo(claim);
                 }
             }
         }
@@ -819,9 +768,9 @@ var Feed = (function () {
         chName = claim.signing_channel ? (claim.signing_channel.name || '') : '';
         channelTitle = claim.signing_channel && claim.signing_channel.value ? claim.signing_channel.value.title || claim.signing_channel.name : (chName || 'Unknown');
         rawAvatarUrl = claim.signing_channel && claim.signing_channel.value && claim.signing_channel.value.thumbnail ? claim.signing_channel.value.thumbnail.url : '';
-        avatarUrl = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatarUrl, 64) : 'icons/spaceman.png';
+        avatarUrl = Utils.getAvatarSrc(rawAvatarUrl, 64);
         isSpaceman = (!avatarUrl || avatarUrl === 'icons/spaceman.png');
-        chColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : 'transparent';
+        chColor = isSpaceman ? Utils.getAvatarColor(chName) : 'transparent';
         ts = claim.value && claim.value.release_time ? claim.value.release_time : (claim.meta && claim.meta.creation_timestamp ? claim.meta.creation_timestamp : 0);
         uploadDate = Utils.formatRelativeTime(ts);
 
@@ -841,7 +790,7 @@ var Feed = (function () {
 
         // Resume progress bar
         progressHtml = '';
-        if (claim.claim_id && window.UserData && typeof UserData.getResumePoint === 'function') {
+        if (claim.claim_id) {
             rp = UserData.getResumePoint(claim.claim_id);
             if (rp && rp.time > 0 && rp.duration > 0) {
                 pct = Math.min(Math.round((rp.time / rp.duration) * 100), 100);
@@ -869,7 +818,7 @@ var Feed = (function () {
                 ptrLongPressed = true;
                 if (claim.signing_channel) {
                     window.lastFocusedCard = cardEl;
-                    triggerOpenChannel(claim.signing_channel);
+                    Channel.open(claim.signing_channel);
                 }
             }, 1200);
         });
@@ -881,7 +830,7 @@ var Feed = (function () {
                 ptrLongPressed = true;
                 if (claim.signing_channel) {
                     window.lastFocusedCard = cardEl;
-                    triggerOpenChannel(claim.signing_channel);
+                    Channel.open(claim.signing_channel);
                 }
             }, 1200);
         });
@@ -908,7 +857,7 @@ var Feed = (function () {
         cardEl.addEventListener('longpress', function () {
             if (claim.signing_channel) {
                 window.lastFocusedCard = cardEl;
-                triggerOpenChannel(claim.signing_channel);
+                Channel.open(claim.signing_channel);
             }
         });
 
@@ -928,7 +877,7 @@ var Feed = (function () {
             } else {
                 window.lastFocusedChannelCard = cardEl;
             }
-            triggerPlayVideo(claim);
+            Player.playVideo(claim);
         });
 
         return cardEl;
@@ -985,9 +934,3 @@ var Feed = (function () {
     };
 }());
 
-// Global backwards-compatibility aliases
-var loadPage = Feed.loadPage;
-var doSearch = Feed.doSearch;
-var loadMoreContent = Feed.loadMoreContent;
-var createVideoCard = Feed.createVideoCard;
-var releaseOffscreenThumbs = Feed.releaseOffscreenThumbs;

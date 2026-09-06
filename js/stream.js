@@ -20,8 +20,7 @@ var StreamResolver = (function () {
             return null;
         }
         entry = magicCache[claimId];
-        nowSec = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === 'function') ?
-            OdyseeAPI.getServerNowSec() : Math.floor(new Date().getTime() / 1000);
+        nowSec = LbryNet.getServerNowSec();
         if (entry.expiresAt && nowSec < entry.expiresAt - 15) {
             return entry.url;
         }
@@ -120,8 +119,7 @@ var StreamResolver = (function () {
         cid = claim.claim_id;
         sd = claim.value && claim.value.source ? claim.value.source.sd_hash : '';
 
-        blocked = (window.ClaimFilter && typeof ClaimFilter.protectedReason === 'function') ?
-            ClaimFilter.protectedReason(claim) : null;
+        blocked = ClaimFilter.protectedReason(claim);
         if (blocked) {
             return cb(new Error(blocked + ' The player cannot decode this.'));
         }
@@ -169,14 +167,12 @@ var StreamResolver = (function () {
             rebuf_duration: rebufDuration || 0
         };
 
-        if (window.LbryNet && typeof LbryNet.ensureAuthToken === 'function') {
-            LbryNet.ensureAuthToken(function () {
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', 'https://watchman.na-backend.odysee.com/reports/playback', true);
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.send(JSON.stringify(payload));
-            });
-        }
+        LbryNet.ensureAuthToken(function () {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', 'https://watchman.na-backend.odysee.com/reports/playback', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(JSON.stringify(payload));
+        });
     }
 
     return {

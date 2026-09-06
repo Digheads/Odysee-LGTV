@@ -5,10 +5,6 @@
 var Navigation = (function () {
     var navSections = [];
 
-    function getNavIcon(id) {
-        return (typeof Icons !== 'undefined' && Icons.get) ? Icons.get(id) : '';
-    }
-
     function sectionLabel(id) {
         var key;
         var i;
@@ -55,13 +51,13 @@ var Navigation = (function () {
         if (!img) {
             return;
         }
-        if (window.Auth && Auth.isLoggedIn()) {
+        if (Auth.isLoggedIn()) {
             rawAvatar = Auth.getAvatarUrl();
-            processed = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatar, 160) : rawAvatar;
+            processed = Utils.getAvatarSrc(rawAvatar, 160);
             isSpaceman = (!processed || processed === 'icons/spaceman.png');
-            user = Auth.getUser ? Auth.getUser() : {};
+            user = Auth.getUser();
             chName = user ? (user.channelName || '') : '';
-            avatarColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : 'transparent';
+            avatarColor = isSpaceman ? Utils.getAvatarColor(chName) : 'transparent';
             img.src = processed || 'icons/spaceman.png';
             img.style.backgroundColor = avatarColor;
             img.className = 'logo-img user-avatar';
@@ -87,11 +83,7 @@ var Navigation = (function () {
                 }
                 this.classList.add('active');
                 navId = this.getAttribute('data-id');
-                if (window.Feed && typeof Feed.loadPage === 'function') {
-                    Feed.loadPage(navId);
-                } else if (typeof loadPage === 'function') {
-                    loadPage(navId);
-                }
+                Feed.loadPage(navId);
             });
         }
     }
@@ -128,13 +120,13 @@ var Navigation = (function () {
         }
 
         currentActiveEl = document.querySelector('.nav-item.active');
-        activeId = currentActiveEl ? currentActiveEl.getAttribute('data-id') : (window.Feed && typeof Feed.getCurrentCategory === 'function' ? Feed.getCurrentCategory() : 'nav-trending');
+        activeId = currentActiveEl ? currentActiveEl.getAttribute('data-id') : Feed.getCurrentCategory();
         if (!activeId) {
             activeId = 'nav-trending';
         }
 
         items = [];
-        if (window.Auth && Auth.isLoggedIn()) {
+        if (Auth.isLoggedIn()) {
             items.push({ id: 'nav-profile', label: 'Profile' });
             items.push({ id: 'nav-following', label: 'Following' });
             items.push({ id: 'nav-watch-later', label: 'Watch Later' });
@@ -158,28 +150,23 @@ var Navigation = (function () {
             li = document.createElement('li');
             li.className = 'focusable nav-item' + (items[j].id === activeId ? ' active' : '');
             li.setAttribute('data-id', items[j].id);
-            escLabel = (window.Utils && Utils.escapeHtml) ? Utils.escapeHtml(items[j].label) : items[j].label;
-            li.innerHTML = getNavIcon(items[j].id) + '<span>' + escLabel + '</span>';
+            escLabel = Utils.escapeHtml(items[j].label);
+            li.innerHTML = Icons.get(items[j].id) + '<span>' + escLabel + '</span>';
             ul.appendChild(li);
         }
 
         bindNav();
         updateLogoAvatar();
-        if (window.SpatialNavigation && typeof SpatialNavigation.refresh === 'function') {
-            SpatialNavigation.refresh();
-        }
+        SpatialNavigation.refresh();
     }
 
     // Listen for auth state changes
-    if (window.Auth && typeof Auth.onAuthStateChanged === 'function') {
-        Auth.onAuthStateChanged(function () {
-            buildNav();
-            updateLogoAvatar();
-        });
-    }
+    Auth.onAuthStateChanged(function () {
+        buildNav();
+        updateLogoAvatar();
+    });
 
     return {
-        getNavIcon: getNavIcon,
         sectionLabel: sectionLabel,
         bindNav: bindNav,
         buildNav: buildNav,
@@ -187,8 +174,3 @@ var Navigation = (function () {
         updateLogoAvatar: updateLogoAvatar
     };
 }());
-
-// Global backwards-compatibility aliases
-var buildNav = Navigation.buildNav;
-var bindNav = Navigation.bindNav;
-var sectionLabel = Navigation.sectionLabel;

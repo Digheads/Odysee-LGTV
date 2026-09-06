@@ -51,7 +51,7 @@ var Player = (function () {
         sidebar.classList.remove('hidden');
         listEl.innerHTML = '<div class="comments-loading">Loading comments...</div>';
 
-        if (window.Comments && typeof Comments.list === 'function' && claimId) {
+        if (claimId) {
             Comments.list(claimId, 1, function (err, res) {
                 var total;
                 var html;
@@ -80,10 +80,8 @@ var Player = (function () {
                 for (idx = 0; idx < res.items.length; idx++) {
                     item = res.items[idx];
                     author = item.channel_name || 'Anonymous';
-                    timeAgo = (window.Utils && typeof Utils.formatRelativeTime === 'function' && item.timestamp) ?
-                        Utils.formatRelativeTime(item.timestamp) : '';
-                    bodyText = (window.Utils && typeof Utils.escapeHtml === 'function') ?
-                        Utils.escapeHtml(item.comment || '') : (item.comment || '');
+                    timeAgo = item.timestamp ? Utils.formatRelativeTime(item.timestamp) : '';
+                    bodyText = Utils.escapeHtml(item.comment || '');
 
                     html += '<div class="comment-card">';
                     html += '  <div class="comment-card-header">';
@@ -134,9 +132,9 @@ var Player = (function () {
         if (ch) {
             chTitle = (ch.value && ch.value.title) ? ch.value.title : (ch.name || '');
             rawAvatar = (ch.value && ch.value.thumbnail) ? ch.value.thumbnail.url : '';
-            avUrl = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatar, 64) : (rawAvatar ? Utils.thumbUrl(rawAvatar, 64) : 'icons/spaceman.png');
+            avUrl = Utils.getAvatarSrc(rawAvatar, 64);
             isSpaceman = (!avUrl || avUrl === 'icons/spaceman.png');
-            chColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(ch.name) : 'transparent';
+            chColor = isSpaceman ? Utils.getAvatarColor(ch.name) : 'transparent';
             if (channelName) {
                 channelName.textContent = chTitle;
             }
@@ -232,7 +230,7 @@ var Player = (function () {
             relRow.innerHTML = '<div style="color:#9B9FA8; font-size:16px; padding:12px 0;">Loading related videos...</div>';
         }
 
-        if (window.OdyseeAPI && typeof OdyseeAPI.getRelatedVideos === 'function' && claim) {
+        if (claim) {
             OdyseeAPI.getRelatedVideos(claim, function (err, res) {
                 var chVids;
                 var relVids;
@@ -338,9 +336,7 @@ var Player = (function () {
 
         isPlayerActive = false;
         closeCommentsSidebar();
-        if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
-            SpatialNavigation.unlock();
-        }
+        SpatialNavigation.unlock();
         shelf = document.getElementById('player-related-shelf');
         scrollEl = document.getElementById('player-shelves-scroll');
         if (shelf) {
@@ -382,9 +378,7 @@ var Player = (function () {
         if (!videoEl.paused || videoEl.currentTime > 0) {
             dur = videoEl.duration || parseFloat(videoEl.getAttribute('data-duration')) || 0;
             rel = dur > 0 ? (videoEl.currentTime / dur * 100) : 0;
-            if (window.OdyseeAPI && typeof OdyseeAPI.reportWatchmanPlayback === 'function') {
-                OdyseeAPI.reportWatchmanPlayback(videoEl.currentSrc || '', dur, videoEl.currentTime, rel, rebufCount, rebufDuration);
-            }
+            StreamResolver.reportWatchmanPlayback(videoEl.currentSrc || '', dur, videoEl.currentTime, rel, rebufCount, rebufDuration);
         }
         rebufCount = 0;
         rebufStart = 0;
@@ -394,9 +388,7 @@ var Player = (function () {
         if (cClaim && cClaim.claim_id && videoEl) {
             curClose = videoEl.currentTime || 0;
             durClose = videoEl.duration || 0;
-            if (window.OdyseeAPI && typeof OdyseeAPI.saveResumePoint === 'function') {
-                OdyseeAPI.saveResumePoint(cClaim.claim_id, curClose, durClose);
-            }
+            UserData.saveResumePoint(cClaim.claim_id, curClose, durClose);
         }
 
         videoEl.pause();
@@ -438,8 +430,7 @@ var Player = (function () {
         var stalledAtZero = false;
         var playReason = '';
 
-        var resumePoint = (window.OdyseeAPI && typeof OdyseeAPI.getResumePoint === 'function') ?
-            OdyseeAPI.getResumePoint(claim.claim_id) : null;
+        var resumePoint = UserData.getResumePoint(claim.claim_id);
         var initialResumeTime = (resumePoint && resumePoint.time > 10 && (!resumePoint.duration || resumePoint.time < resumePoint.duration - 15)) ?
             resumePoint.time : 0;
 
@@ -513,7 +504,7 @@ var Player = (function () {
 
             if (code === 3 || code === 4) {
                 if (!triedMp4 && url.indexOf('/v6/streams/') === -1) {
-                    mp4 = OdyseeAPI.buildMp4Url(currentClaim);
+                    mp4 = StreamResolver.buildMp4Url(currentClaim);
                     if (mp4) {
                         triedMp4 = true;
                         playReason = 'raw mp4 fallback (previous source error code: ' + code + ')';
@@ -655,7 +646,7 @@ var Player = (function () {
                         }
                         claim._cached_reactions.like = newL;
                         claim._cached_reactions.myReaction = null;
-                        OdyseeAPI.react(claimId, 'like', true);
+                        UserData.react(claimId, 'like', true);
                     } else {
                         btnLike.classList.add('active-like');
                         newL = curL + 1;
@@ -678,7 +669,7 @@ var Player = (function () {
                             }
                             claim._cached_reactions.dislike = newD;
                         }
-                        OdyseeAPI.react(claimId, 'like', false);
+                        UserData.react(claimId, 'like', false);
                     }
                 };
             }
@@ -712,7 +703,7 @@ var Player = (function () {
                         }
                         claim._cached_reactions.dislike = newD;
                         claim._cached_reactions.myReaction = null;
-                        OdyseeAPI.react(claimId, 'dislike', true);
+                        UserData.react(claimId, 'dislike', true);
                     } else {
                         btnDislike.classList.add('active-dislike');
                         newD = curD + 1;
@@ -735,7 +726,7 @@ var Player = (function () {
                             }
                             claim._cached_reactions.like = newL;
                         }
-                        OdyseeAPI.react(claimId, 'dislike', false);
+                        UserData.react(claimId, 'dislike', false);
                     }
                 };
             }
@@ -783,8 +774,8 @@ var Player = (function () {
                     '</button>';
                 bindReactionButtons(claim.claim_id);
 
-                if (myRx === undefined && window.OdyseeAPI && typeof OdyseeAPI.getMyReaction === 'function') {
-                    OdyseeAPI.getMyReaction(claim.claim_id, function (err, rx) {
+                if (myRx === undefined) {
+                    UserData.getMyReaction(claim.claim_id, function (err, rx) {
                         var bLike = document.getElementById('btn-like');
                         var bDislike = document.getElementById('btn-dislike');
 
@@ -815,15 +806,14 @@ var Player = (function () {
             var cachedMagicUrl;
             var cachedHls;
 
-            cachedMagicUrl = (window.StreamResolver && typeof StreamResolver.getCachedMagicUrl === 'function') ?
-                StreamResolver.getCachedMagicUrl(currentClaim.claim_id) : null;
+            cachedMagicUrl = StreamResolver.getCachedMagicUrl(currentClaim.claim_id);
             if (cachedMagicUrl) {
                 console.log('StreamResolver: starting immediately with cached magic URL: ' + cachedMagicUrl);
                 videoEl.dataset.rawUrl = rawUrl;
                 videoEl.dataset.useMagic = 'true';
                 window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
                 window._magicPrefetchDone = false;
-                cachedHls = PREFER_HLS ? OdyseeAPI.buildHlsUrl(currentClaim) : null;
+                cachedHls = PREFER_HLS ? StreamResolver.buildHlsUrl(currentClaim) : null;
                 if (cachedHls) {
                     hadHls = true;
                     playReason = 'cached magic (HLS + mp4 fallback)';
@@ -894,14 +884,14 @@ var Player = (function () {
                         return;
                     }
 
-                    if ((s === 200 || s === 308) && useMagic && window.StreamResolver && typeof StreamResolver.setCachedMagicUrl === 'function') {
+                    if ((s === 200 || s === 308) && useMagic) {
                         StreamResolver.setCachedMagicUrl(currentClaim.claim_id, url);
                         window._magicUrlStartedAt = Math.floor(Date.now() / 1000);
                         window._magicPrefetchDone = false;
                     }
 
                     if (s === 308 && PREFER_HLS) {
-                        hls = OdyseeAPI.buildHlsUrl(currentClaim);
+                        hls = StreamResolver.buildHlsUrl(currentClaim);
                         if (hls) {
                             hadHls = true;
                             playReason = 'HLS + mp4 fallback, explicit type';
@@ -972,7 +962,7 @@ var Player = (function () {
             uploadDate = new Date(claim.value.release_time * 1000).toLocaleDateString();
         }
 
-        clockSvg = (typeof Icons !== 'undefined') ? Icons.get('clock') : '';
+        clockSvg = Icons.get('clock');
         metaDateEl = document.getElementById('meta-date');
         if (metaDateEl) {
             metaDateEl.innerHTML = uploadDate ? clockSvg + uploadDate : '';
@@ -998,11 +988,11 @@ var Player = (function () {
             progressFillEl.style.width = '0%';
         }
 
-        eyeSvg = (typeof Icons !== 'undefined') ? Icons.get('eye') : '';
+        eyeSvg = Icons.get('eye');
         if (claim._cached_views !== undefined && metaViewsEl) {
             metaViewsEl.innerHTML = eyeSvg + claim._cached_views;
         } else if (claim.claim_id) {
-            OdyseeAPI.getViewCount(claim.claim_id, function (err, views) {
+            UserData.getViewCount(claim.claim_id, function (err, views) {
                 if (!err && metaViewsEl) {
                     claim._cached_views = views;
                     metaViewsEl.innerHTML = eyeSvg + views;
@@ -1013,13 +1003,13 @@ var Player = (function () {
         // Comment count on player
         countComments = document.getElementById('comments-count');
         iconComments = document.getElementById('comments-icon');
-        if (iconComments && typeof Icons !== 'undefined') {
+        if (iconComments) {
             iconComments.innerHTML = Icons.get('comment');
         }
         if (countComments) {
             countComments.textContent = '0';
         }
-        if (window.Comments && typeof Comments.list === 'function' && claim.claim_id) {
+        if (claim.claim_id) {
             Comments.list(claim.claim_id, 1, function (err, res) {
                 if (!err && res && countComments) {
                     countComments.textContent = res.total_items || 0;
@@ -1027,12 +1017,11 @@ var Player = (function () {
             });
         }
 
-        isAuth = window.Auth && Auth.isLoggedIn && Auth.isLoggedIn();
-        likeSvg = (typeof Icons !== 'undefined') ? Icons.get('fire') : '';
-        dislikeSvg = (typeof Icons !== 'undefined') ? Icons.get('slime') : '';
+        isAuth = Auth.isLoggedIn();
+        likeSvg = Icons.get('fire');
+        dislikeSvg = Icons.get('slime');
 
-        cachedRx = (window.OdyseeAPI && typeof OdyseeAPI.getCachedReactions === 'function') ?
-            OdyseeAPI.getCachedReactions(claim.claim_id) : (claim._cached_reactions || null);
+        cachedRx = UserData.getCachedReactions(claim.claim_id) || claim._cached_reactions || null;
 
         // Render reaction buttons immediately so they are available right away
         renderReactions(
@@ -1042,7 +1031,7 @@ var Player = (function () {
         );
 
         if (claim.claim_id) {
-            OdyseeAPI.getReactions(claim.claim_id, function (err, reactions) {
+            UserData.getReactions(claim.claim_id, function (err, reactions) {
                 if (!err && reactions) {
                     claim._cached_reactions = reactions;
                     renderReactions(reactions.like, reactions.dislike, reactions.myReaction);
@@ -1064,9 +1053,7 @@ var Player = (function () {
         }
         updatePlayerChannelHeader(claim);
         resetAndLoadRelatedShelf(claim);
-        if (window.SpatialNavigation && typeof SpatialNavigation.lock === 'function') {
-            SpatialNavigation.lock();
-        }
+        SpatialNavigation.lock();
         if (playerContainerEl) {
             playerContainerEl.classList.remove('hidden');
         }
@@ -1074,7 +1061,7 @@ var Player = (function () {
             loadingEl.style.display = 'block';
         }
 
-        OdyseeAPI.getStreamingSourceUrl(claim, function (tErr, url) {
+        StreamResolver.getStreamingSourceUrl(claim, function (tErr, url) {
             var src;
             var sd;
             var cid;
@@ -1175,9 +1162,9 @@ var Player = (function () {
             return;
         }
 
-        cachedM = (useM && window.StreamResolver && typeof StreamResolver.getCachedMagicUrl === 'function' && window._activeClaim) ?
+        cachedM = (useM && window._activeClaim) ?
             StreamResolver.getCachedMagicUrl(window._activeClaim.claim_id) : null;
-        if (cachedM && window.StreamResolver && typeof StreamResolver.clearCachedMagicUrl === 'function' && window._activeClaim) {
+        if (cachedM && window._activeClaim) {
             StreamResolver.clearCachedMagicUrl(window._activeClaim.claim_id);
         }
         newUrl = cachedM || Utils.buildPlayableUrl(raw, useM);
@@ -1330,13 +1317,11 @@ var Player = (function () {
             }
             if (warmXhr.status === 401) {
                 console.warn('Watchdog: 401 received on warmup. Re-syncing clock...');
-                if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === 'function') {
-                    OdyseeAPI.syncServerTime(function () {
-                        var resyncedUrl = Utils.buildPlayableUrl(raw, true);
-                        finishWarmup(resyncedUrl);
-                    });
-                    return;
-                }
+                LbryNet.syncServerTime(function () {
+                    var resyncedUrl = Utils.buildPlayableUrl(raw, true);
+                    finishWarmup(resyncedUrl);
+                });
+                return;
             }
             finishWarmup(newUrl);
         };
@@ -1419,13 +1404,11 @@ var Player = (function () {
                     mMatch = activeSrc.match(/[?&]magic=(\d+)/);
                     activeMagicTs = mMatch ? parseInt(mMatch[1], 10) : (window._magicUrlStartedAt || 0);
                     if (activeMagicTs && !window._magicPrefetchInFlight) {
-                        nowSec = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === 'function') ?
-                            OdyseeAPI.getServerNowSec() : Math.floor(Date.now() / 1000);
+                        nowSec = LbryNet.getServerNowSec();
                         elapsed = nowSec - activeMagicTs;
 
                         claimId = window._activeClaim ? window._activeClaim.claim_id : null;
-                        cachedUrl = (claimId && window.StreamResolver && typeof StreamResolver.getCachedMagicUrl === 'function') ?
-                            StreamResolver.getCachedMagicUrl(claimId) : null;
+                        cachedUrl = claimId ? StreamResolver.getCachedMagicUrl(claimId) : null;
 
                         if (elapsed >= 300 && !cachedUrl) {
                             window._magicPrefetchInFlight = true;
@@ -1442,9 +1425,7 @@ var Player = (function () {
                                         console.log('Watchdog: proactive pre-warm status=' + preXhr.status);
                                         if (preXhr.status === 200 || preXhr.status === 308 || (preXhr.status >= 200 && preXhr.status < 400)) {
                                             console.log('Watchdog: proactive magic link pre-warmed successfully (' + preXhr.status + ')');
-                                            if (window.StreamResolver && typeof StreamResolver.setCachedMagicUrl === 'function') {
-                                                StreamResolver.setCachedMagicUrl(claimId, nextMagicUrl);
-                                            }
+                                            StreamResolver.setCachedMagicUrl(claimId, nextMagicUrl);
                                         } else {
                                             console.warn('Watchdog: proactive pre-warm returned status ' + preXhr.status + ', will retry');
                                         }
@@ -2154,13 +2135,11 @@ var Player = (function () {
                 return;
             }
             rel = dur > 0 ? (cur / dur * 100) : 0;
-            if (window.OdyseeAPI && typeof OdyseeAPI.reportWatchmanPlayback === 'function') {
-                OdyseeAPI.reportWatchmanPlayback(videoEl.currentSrc || '', dur, cur, rel, rebufCount, rebufDuration);
-            }
+            StreamResolver.reportWatchmanPlayback(videoEl.currentSrc || '', dur, cur, rel, rebufCount, rebufDuration);
 
             cClaim = window._activeClaim;
-            if (cClaim && cClaim.claim_id && window.OdyseeAPI && typeof OdyseeAPI.saveResumePoint === 'function') {
-                OdyseeAPI.saveResumePoint(cClaim.claim_id, 0, dur);
+            if (cClaim && cClaim.claim_id) {
+                UserData.saveResumePoint(cClaim.claim_id, 0, dur);
             }
 
             closePlayer();
@@ -2201,13 +2180,9 @@ var Player = (function () {
                     lastProgressReport = now;
                     cClaim = window._activeClaim;
                     if (cClaim && cClaim.claim_id) {
-                        if (window.OdyseeAPI && typeof OdyseeAPI.saveViewProgress === 'function') {
-                            uri = cClaim.canonical_url || cClaim.permanent_url || cClaim.short_url || '';
-                            OdyseeAPI.saveViewProgress(cClaim.claim_id, uri, cur);
-                        }
-                        if (window.OdyseeAPI && typeof OdyseeAPI.saveResumePoint === 'function') {
-                            OdyseeAPI.saveResumePoint(cClaim.claim_id, cur, dur);
-                        }
+                        uri = cClaim.canonical_url || cClaim.permanent_url || cClaim.short_url || '';
+                        UserData.saveViewProgress(cClaim.claim_id, uri, cur);
+                        UserData.saveResumePoint(cClaim.claim_id, cur, dur);
                     }
                 }
             } catch (err) { }
@@ -2238,15 +2213,9 @@ var Player = (function () {
                     pf[p].classList.remove('focused');
                 }
                 btnCommentsReFocus.classList.add('focused');
-                if (window.SpatialNavigation && typeof SpatialNavigation.focusNode === 'function') {
-                    SpatialNavigation.focusNode(btnCommentsReFocus);
-                }
+                SpatialNavigation.focusNode(btnCommentsReFocus);
             }
         }
     };
 }());
 
-// Global backwards-compatibility aliases
-var playVideo = Player.playVideo;
-var closePlayer = Player.close;
-window.stopWatchdog = Player.stopWatchdog;

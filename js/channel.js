@@ -22,7 +22,7 @@ var Channel = (function () {
         if (!btn) {
             return;
         }
-        iconSvg = window.Icons ? (isFollowing ? Icons.get('following') : Icons.get('follow')) : '';
+        iconSvg = isFollowing ? Icons.get('following') : Icons.get('follow');
         if (isFollowing) {
             btn.innerHTML = iconSvg + '<span class="btn-follow-label">Following</span>';
             btn.classList.add('following');
@@ -143,21 +143,19 @@ var Channel = (function () {
         window.channelPageChannelClaim = null;
         window.channelPageFollowerCount = null;
 
-        if (window.SpatialNavigation) {
-            SpatialNavigation.lock();
-            SpatialNavigation.refresh();
-            if (!dontRestoreFocus) {
-                if (window.lastFocusedCard) {
-                    SpatialNavigation.focusNode(window.lastFocusedCard);
-                } else {
-                    firstCard = document.querySelector('.video-card');
-                    if (firstCard) {
-                        SpatialNavigation.focusNode(firstCard);
-                    }
+        SpatialNavigation.lock();
+        SpatialNavigation.refresh();
+        if (!dontRestoreFocus) {
+            if (window.lastFocusedCard) {
+                SpatialNavigation.focusNode(window.lastFocusedCard);
+            } else {
+                firstCard = document.querySelector('.video-card');
+                if (firstCard) {
+                    SpatialNavigation.focusNode(firstCard);
                 }
             }
-            SpatialNavigation.unlock();
         }
+        SpatialNavigation.unlock();
     }
 
     function open(channelClaim) {
@@ -211,9 +209,9 @@ var Channel = (function () {
         avatarUrl = channelClaim.value && channelClaim.value.thumbnail ? channelClaim.value.thumbnail.url : '';
         avatarEl = document.getElementById('cp-avatar');
         if (avatarEl) {
-            processedSrc = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(avatarUrl, 120) : (avatarUrl ? Utils.thumbUrl(avatarUrl, 120) : 'icons/spaceman.png');
+            processedSrc = Utils.getAvatarSrc(avatarUrl, 120);
             isSpaceman = (!processedSrc || processedSrc === 'icons/spaceman.png');
-            chColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(channelClaim.name) : 'transparent';
+            chColor = isSpaceman ? Utils.getAvatarColor(channelClaim.name) : 'transparent';
             avatarEl.src = processedSrc;
             avatarEl.style.backgroundColor = chColor;
         }
@@ -229,14 +227,12 @@ var Channel = (function () {
             statsEl.textContent = uploadsCount + ' uploads';
         }
 
-        if (window.OdyseeAPI && typeof OdyseeAPI.getFollowerCount === 'function') {
-            OdyseeAPI.getFollowerCount(channelClaim.claim_id, function (err, followCount) {
-                if (!err && followCount !== undefined && statsEl) {
-                    window.channelPageFollowerCount = followCount;
-                    statsEl.textContent = followCount + ' followers • ' + uploadsCount + ' uploads';
-                }
-            });
-        }
+        OdyseeAPI.getFollowerCount(channelClaim.claim_id, function (err, followCount) {
+            if (!err && followCount !== undefined && statsEl) {
+                window.channelPageFollowerCount = followCount;
+                statsEl.textContent = followCount + ' followers • ' + uploadsCount + ' uploads';
+            }
+        });
 
         // Follow button logic
         followBtn = document.getElementById('btn-channel-follow');
@@ -246,10 +242,10 @@ var Channel = (function () {
             followBtn.style.display = 'none'; // Default hidden
             followBtn.onclick = null;
 
-            loggedIn = window.Auth && typeof Auth.isLoggedIn === 'function' && Auth.isLoggedIn();
+            loggedIn = Auth.isLoggedIn();
             if (loggedIn) {
                 // Check if this is the user's own channel
-                ownChannelIds = (window.Auth && typeof Auth.getChannelClaimIds === 'function') ? Auth.getChannelClaimIds() : [];
+                ownChannelIds = Auth.getChannelClaimIds() || [];
                 isOwnChannel = false;
                 for (oc = 0; oc < ownChannelIds.length; oc++) {
                     if (ownChannelIds[oc] === channelClaim.claim_id) {
@@ -295,12 +291,8 @@ var Channel = (function () {
         if (cpLoading) {
             cpLoading.style.display = 'block';
         }
-        if (window.SpatialNavigation) {
-            SpatialNavigation.lock();
-            if (typeof SpatialNavigation.clearFocus === 'function') {
-                SpatialNavigation.clearFocus();
-            }
-        }
+        SpatialNavigation.lock();
+        SpatialNavigation.clearFocus();
 
         OdyseeAPI.searchChannelVideos(channelClaim.claim_id, function (err, res) {
             var targetNode;
@@ -316,14 +308,12 @@ var Channel = (function () {
                 if (grid) {
                     grid.innerHTML = '<div style="color:white; font-size:24px; text-align:center; padding: 20px;">Error loading channel videos.</div>';
                 }
-                if (window.SpatialNavigation) {
-                    SpatialNavigation.refresh();
-                    targetNode = hasFollowBtn ? followBtn : document.getElementById('cp-header');
-                    if (targetNode) {
-                        SpatialNavigation.focusNode(targetNode);
-                    }
-                    SpatialNavigation.unlock();
+                SpatialNavigation.refresh();
+                targetNode = hasFollowBtn ? followBtn : document.getElementById('cp-header');
+                if (targetNode) {
+                    SpatialNavigation.focusNode(targetNode);
                 }
+                SpatialNavigation.unlock();
                 return;
             }
             if (res && res.items && res.items.length > 0) {
@@ -341,27 +331,23 @@ var Channel = (function () {
                         grid.appendChild(card);
                     }
                 }
-                if (window.SpatialNavigation) {
-                    SpatialNavigation.refresh();
-                    targetNode = hasFollowBtn ? followBtn : document.getElementById('cp-header');
-                    if (targetNode) {
-                        SpatialNavigation.focusNode(targetNode);
-                    }
-                    SpatialNavigation.unlock();
+                SpatialNavigation.refresh();
+                targetNode = hasFollowBtn ? followBtn : document.getElementById('cp-header');
+                if (targetNode) {
+                    SpatialNavigation.focusNode(targetNode);
                 }
+                SpatialNavigation.unlock();
             } else {
                 window.channelPageHasMore = false;
                 if (grid) {
                     grid.innerHTML = '<div style="color:white; font-size:24px; text-align:center; padding: 20px;">No videos found.</div>';
                 }
-                if (window.SpatialNavigation) {
-                    SpatialNavigation.refresh();
-                    targetNode = hasFollowBtn ? followBtn : document.getElementById('cp-header');
-                    if (targetNode) {
-                        SpatialNavigation.focusNode(targetNode);
-                    }
-                    SpatialNavigation.unlock();
+                SpatialNavigation.refresh();
+                targetNode = hasFollowBtn ? followBtn : document.getElementById('cp-header');
+                if (targetNode) {
+                    SpatialNavigation.focusNode(targetNode);
                 }
+                SpatialNavigation.unlock();
             }
         }, 1);
     }
@@ -420,9 +406,3 @@ var Channel = (function () {
         loadMore: loadMore
     };
 }());
-
-// Global backwards-compatibility aliases
-window.Channel = Channel;
-window.openChannelPage = Channel.open;
-window.closeChannelPage = Channel.close;
-window.loadMoreChannelContent = Channel.loadMore;

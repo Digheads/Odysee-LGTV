@@ -71,8 +71,7 @@ var Utils = (function () {
         if (!useMagic) {
             return u;
         }
-        var now = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === 'function') ?
-            OdyseeAPI.getServerNowSec() : Math.floor(Date.now() / 1000);
+        var now = LbryNet.getServerNowSec();
         return u + (u.indexOf('?') === -1 ? '?' : '&') + 'magic=' + now;
     }
 
@@ -135,12 +134,6 @@ var Utils = (function () {
         getAvatarSrc: getAvatarSrc
     };
 }());
-
-// Global backwards-compatibility aliases
-var setDisplayFlex = Utils.setDisplayFlex;
-var escapeHtml = Utils.escapeHtml;
-var thumbUrl = Utils.thumbUrl;
-var buildPlayableUrl = Utils.buildPlayableUrl;
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Utils;
