@@ -61,4 +61,4 @@ Smart TVs present significant fragmentation across browser engines (WebKit vs. C
 ## 5. Summary for Reviewers
 - Validated with `ares-package` with zero compilation errors.
 - Strictly compliant with low-resource embedded TV requirements (ES5 runtime, zero npm runtime dependencies, low RAM usage).
-- Core user journeys (Browse, Search, Device Login, Playback with OSD, Speed Control, Playlists, Channel subscriptions) have been verified on real TV hardware.
+- Core user journeys (Browse, Search, Device Login, Playback with OSD, Playlists, Channel subscriptions) have been verified on real TV hardware.

@@ -207,19 +207,32 @@ var UserData = (function () {
         }
     }
 
-    function saveResumePoint(claimId, time, duration) {
+    function saveResumePoint(claimId, time, duration, completed) {
         var raw;
         var points;
+        var isCompleted;
 
         try {
             raw = localStorage.getItem('odysee_resume_points');
             points = raw ? JSON.parse(raw) : {};
-            if (duration && time / duration > 0.9) {
-                delete points[claimId];
+            if (!claimId) {
+                return;
+            }
+
+            isCompleted = !!completed || (duration > 0 && (time >= duration - 10 || (time / duration) >= 0.97));
+
+            if (isCompleted && duration > 0) {
+                points[claimId] = {
+                    time: Math.floor(duration),
+                    duration: Math.floor(duration),
+                    completed: true,
+                    updatedAt: Date.now()
+                };
             } else if (time > 10) {
                 points[claimId] = {
                     time: Math.floor(time),
                     duration: Math.floor(duration || 0),
+                    completed: false,
                     updatedAt: Date.now()
                 };
             }
@@ -499,7 +512,7 @@ var UserData = (function () {
         var size;
 
         if (typeof cb !== 'function') {
-            cb = function () {};
+            cb = function () { };
         }
         p = page || 1;
         size = 20;
@@ -774,7 +787,7 @@ var UserData = (function () {
         var slice;
 
         if (typeof callback !== 'function') {
-            callback = function () {};
+            callback = function () { };
         }
         p = page || 1;
         size = 20;
@@ -847,7 +860,7 @@ var UserData = (function () {
             cachedFollowedChannels = null;
         } else {
             cachedFollowedChannels = null;
-            getFollowedChannels(function () {});
+            getFollowedChannels(function () { });
         }
     });
 
@@ -1127,7 +1140,7 @@ var UserData = (function () {
                             LbryRpc.call('preference_set', {
                                 key: 'shared',
                                 value: cachedSharedPreferences
-                            }, function () {});
+                            }, function () { });
                         }
                     }
 
@@ -1195,7 +1208,7 @@ var UserData = (function () {
                         LbryRpc.call('preference_set', {
                             key: 'shared',
                             value: cachedSharedPreferences
-                        }, function () {});
+                        }, function () { });
                     }
 
                     if (callback) {
