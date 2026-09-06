@@ -13,10 +13,15 @@ var StreamResolver = (function () {
     var magicCache = {};
 
     function getCachedMagicUrl(claimId) {
-        if (!claimId || !magicCache[claimId]) return null;
-        var entry = magicCache[claimId];
-        var nowSec = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === "function") ?
-            OdyseeAPI.getServerNowSec() : Math.floor(Date.now() / 1000);
+        var entry;
+        var nowSec;
+
+        if (!claimId || !magicCache[claimId]) {
+            return null;
+        }
+        entry = magicCache[claimId];
+        nowSec = (window.OdyseeAPI && typeof OdyseeAPI.getServerNowSec === 'function') ?
+            OdyseeAPI.getServerNowSec() : Math.floor(new Date().getTime() / 1000);
         if (entry.expiresAt && nowSec < entry.expiresAt - 15) {
             return entry.url;
         }
@@ -25,9 +30,14 @@ var StreamResolver = (function () {
     }
 
     function setCachedMagicUrl(claimId, url, createdAtSec) {
-        if (!claimId || !url) return;
-        var m = url.match(/[?&]magic=(\d+)/);
-        var ts = m ? parseInt(m[1], 10) : (createdAtSec || Math.floor(Date.now() / 1000));
+        var m;
+        var ts;
+
+        if (!claimId || !url) {
+            return;
+        }
+        m = url.match(/[?&]magic=(\d+)/);
+        ts = m ? parseInt(m[1], 10) : (createdAtSec || Math.floor(new Date().getTime() / 1000));
         magicCache[claimId] = {
             url: url,
             createdAt: ts,
@@ -44,94 +54,126 @@ var StreamResolver = (function () {
     // The URL of the transcoded HLS master playlist, built from the claim data.
     function buildHlsUrl(claim) {
         var c = (claim && claim.reposted_claim) || claim;
-        if (!c) return null;
-        var sd = c.value && c.value.source ? c.value.source.sd_hash : "";
-        if (!(c.name && c.claim_id && sd)) return null;
-        return "http://player.odycdn.com/api/v4/streams/tc/" +
-            encodeURIComponent(c.name) + "/" + c.claim_id + "/" + sd + "/master.m3u8";
+        var sd;
+
+        if (!c) {
+            return null;
+        }
+        sd = c.value && c.value.source ? c.value.source.sd_hash : '';
+        if (!(c.name && c.claim_id && sd)) {
+            return null;
+        }
+        return 'http://player.odycdn.com/api/v4/streams/tc/' +
+            encodeURIComponent(c.name) + '/' + c.claim_id + '/' + sd + '/master.m3u8';
     }
 
     // The most compatible mp4 format: /v6/ endpoint, with .mp4 extension.
     function buildMp4Url(claim) {
         var c = (claim && claim.reposted_claim) || claim;
-        if (!c) return null;
-        var sd = c.value && c.value.source ? c.value.source.sd_hash : "";
-        if (!(c.claim_id && sd)) return null;
-        return "http://player.odycdn.com/v6/streams/" + c.claim_id + "/" + sd.substring(0, 6) + ".mp4";
+        var sd;
+
+        if (!c) {
+            return null;
+        }
+        sd = c.value && c.value.source ? c.value.source.sd_hash : '';
+        if (!(c.claim_id && sd)) {
+            return null;
+        }
+        return 'http://player.odycdn.com/v6/streams/' + c.claim_id + '/' + sd.substring(0, 6) + '.mp4';
     }
 
     function getStreamingSourceUrl(claimObj, cb) {
         var claim = (claimObj && claimObj.reposted_claim) || claimObj;
-        if (!claim) return cb(new Error("Invalid claim object"));
+        var name;
+        var cid;
+        var sd;
+        var blocked;
+        var u;
+        var uris;
+        var idx;
 
-        var name = claim.name;
-        var cid = claim.claim_id;
-        var sd = claim.value && claim.value.source ? claim.value.source.sd_hash : "";
+        function attempt() {
+            LbryRpc.call('get', {
+                uri: uris[idx]
+            }, function (err, res) {
+                var n;
 
-        var blocked = (window.ClaimFilter && typeof ClaimFilter.protectedReason === "function") ?
+                if (!err && res && res.streaming_url) {
+                    n = res.streaming_url.replace(/^https:/i, 'http:');
+                    console.log('StreamResolver: Stream URL resolved: ' + n);
+                    return cb(null, n);
+                }
+                idx += 1;
+                if (idx < uris.length) {
+                    console.log('StreamResolver: get failed, next URI form -> ' + uris[idx]);
+                    return attempt();
+                }
+                cb(err || new Error('No streaming_url returned'));
+            });
+        }
+
+        if (!claim) {
+            return cb(new Error('Invalid claim object'));
+        }
+
+        name = claim.name;
+        cid = claim.claim_id;
+        sd = claim.value && claim.value.source ? claim.value.source.sd_hash : '';
+
+        blocked = (window.ClaimFilter && typeof ClaimFilter.protectedReason === 'function') ?
             ClaimFilter.protectedReason(claim) : null;
         if (blocked) {
-            return cb(new Error(blocked + " The player cannot decode this."));
+            return cb(new Error(blocked + ' The player cannot decode this.'));
         }
 
         if (name && cid && sd) {
-            var u = USE_V4_HLS ?
-                "http://player.odycdn.com/api/v4/streams/free/" +
-                encodeURIComponent(name) + "/" + cid + "/" + sd.substring(0, 6) :
-                "http://player.odycdn.com/v6/streams/" + cid + "/" + sd.substring(0, 6) + ".mp4";
-            console.log("StreamResolver: stream URL (" + (USE_V4_HLS ? "v4" : "v6") + "): " + u);
+            u = USE_V4_HLS ?
+                'http://player.odycdn.com/api/v4/streams/free/' +
+                encodeURIComponent(name) + '/' + cid + '/' + sd.substring(0, 6) :
+                'http://player.odycdn.com/v6/streams/' + cid + '/' + sd.substring(0, 6) + '.mp4';
+            console.log('StreamResolver: stream URL (' + (USE_V4_HLS ? 'v4' : 'v6') + '): ' + u);
             return cb(null, u);
         }
 
         // No sd_hash (e.g. livestream or incomplete claim) -> fallback to `get` RPC.
-        console.log("StreamResolver: no sd_hash, fallback to get RPC");
-        var uris = [];
-        if (claim.permanent_url) uris.push(claim.permanent_url);
-        if (claim.canonical_url && -1 === uris.indexOf(claim.canonical_url)) uris.push(claim.canonical_url);
-        if (claim.short_url && -1 === uris.indexOf(claim.short_url)) uris.push(claim.short_url);
-        if (!uris.length) return cb(new Error("No resolvable URI on claim"));
-
-        var idx = 0;
-
-        function attempt() {
-            LbryRpc.call("get", {
-                uri: uris[idx]
-            }, function (err, res) {
-                if (!err && res && res.streaming_url) {
-                    var n = res.streaming_url.replace(/^https:/i, "http:");
-                    console.log("StreamResolver: Stream URL resolved: " + n);
-                    return cb(null, n);
-                }
-                idx++;
-                if (idx < uris.length) {
-                    console.log("StreamResolver: get failed, next URI form -> " + uris[idx]);
-                    return attempt();
-                }
-                cb(err || new Error("No streaming_url returned"));
-            });
+        console.log('StreamResolver: no sd_hash, fallback to get RPC');
+        uris = [];
+        if (claim.permanent_url) {
+            uris.push(claim.permanent_url);
         }
+        if (claim.canonical_url && uris.indexOf(claim.canonical_url) === -1) {
+            uris.push(claim.canonical_url);
+        }
+        if (claim.short_url && uris.indexOf(claim.short_url) === -1) {
+            uris.push(claim.short_url);
+        }
+        if (!uris.length) {
+            return cb(new Error('No resolvable URI on claim'));
+        }
+
+        idx = 0;
         attempt();
     }
 
-    function reportWatchmanPlayback(url, duration, position, rel_position, rebuf_count, rebuf_duration) {
+    function reportWatchmanPlayback(url, duration, position, relPosition, rebufCount, rebufDuration) {
         var payload = {
             url: url,
-            device: "stb",
+            device: 'stb',
             duration: Math.floor(duration || 0),
-            protocol: url.indexOf(".m3u8") > -1 ? "hls" : "mp4",
-            player: "lgtv",
-            user_id: "",
+            protocol: url.indexOf('.m3u8') > -1 ? 'hls' : 'mp4',
+            player: 'lgtv',
+            user_id: '',
             position: Math.floor(position || 0),
-            rel_position: Math.floor(rel_position || 0),
-            rebuf_count: rebuf_count || 0,
-            rebuf_duration: rebuf_duration || 0
+            rel_position: Math.floor(relPosition || 0),
+            rebuf_count: rebufCount || 0,
+            rebuf_duration: rebufDuration || 0
         };
 
-        if (window.LbryNet && typeof LbryNet.ensureAuthToken === "function") {
+        if (window.LbryNet && typeof LbryNet.ensureAuthToken === 'function') {
             LbryNet.ensureAuthToken(function () {
                 var xhr = new XMLHttpRequest();
-                xhr.open("POST", "https://watchman.na-backend.odysee.com/reports/playback", true);
-                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.open('POST', 'https://watchman.na-backend.odysee.com/reports/playback', true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
                 xhr.send(JSON.stringify(payload));
             });
         }
@@ -146,4 +188,4 @@ var StreamResolver = (function () {
         setCachedMagicUrl: setCachedMagicUrl,
         clearCachedMagicUrl: clearCachedMagicUrl
     };
-})();
+}());

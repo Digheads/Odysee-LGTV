@@ -10,13 +10,19 @@ var OdyseeAPI = (function () {
     var homepageData = null;
 
     function fetchHomepage(cb) {
-        if (homepageData) return cb(null, homepageData);
-        var r = new XMLHttpRequest();
-        r.open("GET", "https://odysee.com/$/api/content/v1/get?language=en", true);
+        var r;
+
+        if (homepageData) {
+            return cb(null, homepageData);
+        }
+        r = new XMLHttpRequest();
+        r.open('GET', 'https://odysee.com/$/api/content/v1/get?language=en', true);
         r.timeout = 20000;
         r.onreadystatechange = function () {
-            if (4 !== r.readyState) return;
-            if (200 === r.status) {
+            if (r.readyState !== 4) {
+                return;
+            }
+            if (r.status === 200) {
                 try {
                     homepageData = JSON.parse(r.responseText).data.en;
                     return cb(null, homepageData);
@@ -24,10 +30,13 @@ var OdyseeAPI = (function () {
                     return cb(err);
                 }
             }
-            cb(new Error("Homepage API failed: " + r.status));
+            cb(new Error('Homepage API failed: ' + r.status));
         };
-        r.ontimeout = r.onerror = function () {
-            cb(new Error("Homepage API unavailable"));
+        r.ontimeout = function () {
+            cb(new Error('Homepage API unavailable'));
+        };
+        r.onerror = function () {
+            cb(new Error('Homepage API unavailable'));
         };
         r.send();
     }
@@ -40,159 +49,210 @@ var OdyseeAPI = (function () {
         getSections: function (cb) {
             // Display order matching odysee.com sidebar
             var DISPLAY_ORDER = [
-                "PRIMARY_CONTENT", "UNIVERSE", "POP_CULTURE", "GAMING", "COMEDY",
-                "ART", "EDUCATION", "TECHNOLOGY", "LIFESTYLE", "SPOOKY", "MUSIC",
-                "SPORTS", "SPIRITUALITY", "FINANCE", "NEWS_AND_POLITICS"
+                'PRIMARY_CONTENT', 'UNIVERSE', 'POP_CULTURE', 'GAMING', 'COMEDY',
+                'ART', 'EDUCATION', 'TECHNOLOGY', 'LIFESTYLE', 'SPOOKY', 'MUSIC',
+                'SPORTS', 'SPIRITUALITY', 'FINANCE', 'NEWS_AND_POLITICS'
             ];
 
             fetchHomepage(function (err, data) {
-                if (err) return cb(err);
+                var sectionMap;
+                var k;
+                var sec;
+                var ids;
+                var out;
+                var i;
+                var extra;
+
+                if (err) {
+                    return cb(err);
+                }
 
                 // Build a map of all valid sections (with channelIds)
-                var sectionMap = {};
-                for (var k in data) {
-                    if (!data.hasOwnProperty(k)) continue;
-                    var sec = data[k];
-                    if (!sec || "object" != typeof sec) continue;
-                    if (k === "EXPLORABLE_CHANNEL") continue;
-                    var ids = sec.channelIds || [];
-                    if (!ids.length) continue;
-                    sectionMap[k] = {
-                        key: k,
-                        label: sec.label || sec.name || k,
-                        channelLimit: sec.channelLimit || 3
-                    };
+                sectionMap = {};
+                for (k in data) {
+                    if (data.hasOwnProperty(k)) {
+                        sec = data[k];
+                        if (sec && typeof sec === 'object' && k !== 'EXPLORABLE_CHANNEL') {
+                            ids = sec.channelIds || [];
+                            if (ids.length) {
+                                sectionMap[k] = {
+                                    key: k,
+                                    label: sec.label || sec.name || k,
+                                    channelLimit: sec.channelLimit || 3
+                                };
+                            }
+                        }
+                    }
                 }
 
                 // Output in hardcoded odysee.com display order
-                var out = [];
-                for (var i = 0; i < DISPLAY_ORDER.length; i++) {
+                out = [];
+                for (i = 0; i < DISPLAY_ORDER.length; i++) {
                     if (sectionMap[DISPLAY_ORDER[i]]) {
                         out.push(sectionMap[DISPLAY_ORDER[i]]);
                         delete sectionMap[DISPLAY_ORDER[i]];
                     }
                 }
                 // Append any new sections not in DISPLAY_ORDER (future-proofing)
-                for (var extra in sectionMap) {
+                for (extra in sectionMap) {
                     if (sectionMap.hasOwnProperty(extra)) {
                         out.push(sectionMap[extra]);
                     }
                 }
 
-                console.log("OdyseeAPI: " + out.length + " category(ies)");
+                console.log('OdyseeAPI: ' + out.length + ' category(ies)');
                 cb(null, out);
             });
         },
 
         getBaseNotTags: function () {
-            var settings = (window.Auth && typeof Auth.getSettings === "function") ?
-                Auth.getSettings() : { hideMature: true, hideShorts: true, hideYoutube: false };
+            var settings;
+            var notTags;
+            var hasMemberships;
 
-            var notTags = ["c:unlisted", "c:scheduled:show", "c:scheduled:hide"];
+            settings = (window.Auth && typeof Auth.getSettings === 'function') ?
+                Auth.getSettings() : {
+                    hideMature: true,
+                    hideShorts: true,
+                    hideYoutube: false
+                };
+
+            notTags = ['c:unlisted', 'c:scheduled:show', 'c:scheduled:hide'];
 
             // Exclude members-only/rentals at API level ONLY if user has no memberships/purchases
-            var hasMemberships = window.Auth && typeof Auth.hasAnyMembershipsOrPurchases === "function" && Auth.hasAnyMembershipsOrPurchases();
+            hasMemberships = window.Auth && typeof Auth.hasAnyMembershipsOrPurchases === 'function' && Auth.hasAnyMembershipsOrPurchases();
             if (!hasMemberships) {
-                notTags.push("c:members-only", "c:rental", "c:purchase");
+                notTags.push('c:members-only', 'c:rental', 'c:purchase');
             }
 
             // Mature content tags
             if (settings.hideMature) {
-                notTags.push("mature", "c:mature", "nsfw", "c:nsfw", "porn", "xxx", "hentai", "sex", "18+", "adult");
+                notTags.push('mature', 'c:mature', 'nsfw', 'c:nsfw', 'porn', 'xxx', 'hentai', 'sex', '18+', 'adult');
             }
 
             // Synced YouTube content tags
             if (settings.hideYoutube) {
-                notTags.push("youtube-sync", "c:you-tube", "you-tube", "c:youtube");
+                notTags.push('youtube-sync', 'c:you-tube', 'you-tube', 'c:youtube');
             }
 
             return notTags;
         },
 
-        getCategory: function (key, t, page) {
+        getCategory: function (key, cb, page) {
             var self = this;
             fetchHomepage(function (err, data) {
-                if (err) return t(err);
-                var sec = data[key];
-                if (!sec || !(sec.channelIds || []).length) return t(new Error("Unknown category: " + key));
-                LbryRpc.call("claim_search", {
+                var sec;
+
+                if (err) {
+                    return cb(err);
+                }
+                sec = data[key];
+                if (!sec || !(sec.channelIds || []).length) {
+                    return cb(new Error('Unknown category: ' + key));
+                }
+                LbryRpc.call('claim_search', {
                     channel_ids: (sec.channelIds || []).slice(0, 50),
-                    claim_type: ["stream"],
-                    stream_types: ["video"],
+                    claim_type: ['stream'],
+                    stream_types: ['video'],
                     page_size: 20,
                     page: page || 1,
                     has_no_source: false,
-                    fee_amount: "<=0",
+                    fee_amount: '<=0',
                     not_tags: self.getBaseNotTags(),
                     limit_claims_per_channel: parseInt(sec.channelLimit || 3, 10),
-                    order_by: ["trending_group", "trending_mixed"]
-                }, ClaimFilter.filterPlayable(t));
+                    order_by: ['trending_group', 'trending_mixed']
+                }, ClaimFilter.filterPlayable(cb));
             });
         },
 
-        getTrending: function (t, page) {
-            LbryRpc.call("claim_search", {
-                claim_type: ["stream"],
-                stream_types: ["video"],
+        getTrending: function (cb, page) {
+            LbryRpc.call('claim_search', {
+                claim_type: ['stream'],
+                stream_types: ['video'],
                 page_size: 20,
                 page: page || 1,
                 has_no_source: false,
-                fee_amount: "<=0",
+                fee_amount: '<=0',
                 not_tags: this.getBaseNotTags(),
-                order_by: ["trending_group", "trending_mixed"]
-            }, ClaimFilter.filterPlayable(t));
+                order_by: ['trending_group', 'trending_mixed']
+            }, ClaimFilter.filterPlayable(cb));
         },
 
-        search: function (t, r, page) {
+        search: function (query, cb, page) {
             var self = this;
             var p = page || 1;
-            console.log("OdyseeAPI: Searching lighthouse for: " + t);
-            var settings = (window.Auth && typeof Auth.getSettings === "function") ?
-                Auth.getSettings() : { hideMature: true, hideShorts: true, hideYoutube: false };
+            var settings;
+            var xhr;
+            var url;
 
-            var xhr = new XMLHttpRequest();
-            var url = "https://lighthouse.odysee.tv/search?s=" + encodeURIComponent(t) +
-                "&size=20&from=" + ((p - 1) * 20) + "&claimType=file&mediaType=video&free_only=true" +
-                (settings.hideMature ? "&nsfw=false" : "");
+            console.log('OdyseeAPI: Searching lighthouse for: ' + query);
+            settings = (window.Auth && typeof Auth.getSettings === 'function') ?
+                Auth.getSettings() : {
+                    hideMature: true,
+                    hideShorts: true,
+                    hideYoutube: false
+                };
 
-            xhr.open("GET", url, true);
+            xhr = new XMLHttpRequest();
+            url = 'https://lighthouse.odysee.tv/search?s=' + encodeURIComponent(query) +
+                '&size=20&from=' + ((p - 1) * 20) + '&claimType=file&mediaType=video&free_only=true' +
+                (settings.hideMature ? '&nsfw=false' : '');
+
+            xhr.open('GET', url, true);
             xhr.onreadystatechange = function () {
-                if (4 === xhr.readyState) {
-                    if (200 === xhr.status) {
-                        try {
-                            var list = JSON.parse(xhr.responseText);
-                            if (list && list.length > 0) {
-                                var s = [];
-                                for (var o = 0; o < list.length; o++) s.push(list[o].claimId);
-                                console.log("OdyseeAPI: Found " + s.length + " search results. Fetching metadata...");
+                var list;
+                var s;
+                var o;
 
-                                LbryRpc.call("claim_search", {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        try {
+                            list = JSON.parse(xhr.responseText);
+                            if (list && list.length > 0) {
+                                s = [];
+                                for (o = 0; o < list.length; o++) {
+                                    s.push(list[o].claimId);
+                                }
+                                console.log('OdyseeAPI: Found ' + s.length + ' search results. Fetching metadata...');
+
+                                LbryRpc.call('claim_search', {
                                     claim_ids: s,
                                     page_size: 20,
                                     has_no_source: false,
-                                    fee_amount: "<=0",
+                                    fee_amount: '<=0',
                                     not_tags: self.getBaseNotTags()
                                 }, ClaimFilter.filterPlayable(function (e, t) {
-                                    if (e) return r(e);
+                                    var map;
+                                    var j;
+                                    var sorted;
+                                    var i;
+
+                                    if (e) {
+                                        return cb(e);
+                                    }
                                     if (t && t.items) {
-                                        var map = {};
-                                        for (var j = 0; j < t.items.length; j++) map[t.items[j].claim_id] = t.items[j];
-                                        var sorted = [];
-                                        for (var i = 0; i < s.length; i++) {
-                                            if (map[s[i]]) sorted.push(map[s[i]]);
+                                        map = {};
+                                        for (j = 0; j < t.items.length; j++) {
+                                            map[t.items[j].claim_id] = t.items[j];
+                                        }
+                                        sorted = [];
+                                        for (i = 0; i < s.length; i++) {
+                                            if (map[s[i]]) {
+                                                sorted.push(map[s[i]]);
+                                            }
                                         }
                                         t.items = sorted;
                                     }
-                                    r(null, t);
+                                    cb(null, t);
                                 }));
                             } else {
-                                r(null, { items: [] });
+                                cb(null, { items: [] });
                             }
                         } catch (e) {
-                            r(e);
+                            cb(e);
                         }
                     } else {
-                        r(new Error("Search failed: " + xhr.status));
+                        cb(new Error('Search failed: ' + xhr.status));
                     }
                 }
             };
@@ -200,64 +260,91 @@ var OdyseeAPI = (function () {
         },
 
         searchChannelVideos: function (channelClaimId, cb, page) {
-            LbryRpc.call("claim_search", {
+            LbryRpc.call('claim_search', {
                 channel_ids: [channelClaimId],
-                claim_type: ["stream"],
-                stream_types: ["video"],
+                claim_type: ['stream'],
+                stream_types: ['video'],
                 page_size: 20,
                 page: page || 1,
                 has_no_source: false,
-                fee_amount: "<=0",
-                order_by: ["release_time"]
+                fee_amount: '<=0',
+                order_by: ['release_time']
             }, ClaimFilter.filterPlayable(cb));
         },
 
         getFollowerCount: function (channelClaimId, cb) {
             LbryNet.ensureAuthToken(function (token) {
                 var data = { claim_id: channelClaimId };
-                if (token) data.auth_token = token;
 
-                LbryIo.call("/subscription/sub_count", { data: data }, function (err, resp) {
+                if (token) {
+                    data.auth_token = token;
+                }
+
+                LbryIo.call('/subscription/sub_count', { data: data }, function (err, resp) {
                     if (!err && resp && resp.data && resp.data.length > 0) {
                         cb(null, resp.data[0]);
                     } else if (!err) {
                         cb(null, 0);
                     } else {
-                        cb(err || new Error("Follower count API failed"));
+                        cb(err || new Error('Follower count API failed'));
                     }
                 });
             });
         },
 
         getRelatedVideos: function (claim, cb) {
-            if (!claim || !claim.claim_id) return cb(null, { channelTitle: "", channelVideos: [], relatedVideos: [] });
-            var self = this;
-            var currentClaimId = claim.claim_id;
-            var channelClaimId = (claim.signing_channel && claim.signing_channel.claim_id) ? claim.signing_channel.claim_id : null;
-            var channelTitle = (claim.signing_channel && claim.signing_channel.value && claim.signing_channel.value.title) ?
-                claim.signing_channel.value.title : (claim.signing_channel ? claim.signing_channel.name : "");
-            var tags = (claim.value && claim.value.tags) ? claim.value.tags.slice(0, 5) : [];
-            var notTags = self.getBaseNotTags();
+            var self;
+            var currentClaimId;
+            var channelClaimId;
+            var channelTitle;
+            var tags;
+            var notTags;
+            var channelItems;
+            var tagItems;
+            var pending;
+            var tagParams;
 
-            var channelItems = [];
-            var tagItems = [];
-            var pending = 0;
+            if (!claim || !claim.claim_id) {
+                return cb(null, {
+                    channelTitle: '',
+                    channelVideos: [],
+                    relatedVideos: []
+                });
+            }
+            self = this;
+            currentClaimId = claim.claim_id;
+            channelClaimId = (claim.signing_channel && claim.signing_channel.claim_id) ? claim.signing_channel.claim_id : null;
+            channelTitle = (claim.signing_channel && claim.signing_channel.value && claim.signing_channel.value.title) ?
+                claim.signing_channel.value.title : (claim.signing_channel ? claim.signing_channel.name : '');
+            tags = (claim.value && claim.value.tags) ? claim.value.tags.slice(0, 5) : [];
+            notTags = self.getBaseNotTags();
+
+            channelItems = [];
+            tagItems = [];
+            pending = 0;
 
             function finish() {
                 var channelMap = {};
                 var cleanChannel = [];
-                for (var i = 0; i < channelItems.length; i++) {
-                    var cItem = channelItems[i];
+                var relatedMap;
+                var cleanRelated;
+                var i;
+                var cItem;
+                var j;
+                var tItem;
+
+                for (i = 0; i < channelItems.length; i++) {
+                    cItem = channelItems[i];
                     if (cItem && cItem.claim_id && cItem.claim_id !== currentClaimId && !channelMap[cItem.claim_id]) {
                         channelMap[cItem.claim_id] = true;
                         cleanChannel.push(cItem);
                     }
                 }
 
-                var relatedMap = {};
-                var cleanRelated = [];
-                for (var j = 0; j < tagItems.length; j++) {
-                    var tItem = tagItems[j];
+                relatedMap = {};
+                cleanRelated = [];
+                for (j = 0; j < tagItems.length; j++) {
+                    tItem = tagItems[j];
                     if (tItem && tItem.claim_id && tItem.claim_id !== currentClaimId && !channelMap[tItem.claim_id] && !relatedMap[tItem.claim_id]) {
                         relatedMap[tItem.claim_id] = true;
                         cleanRelated.push(tItem);
@@ -265,19 +352,22 @@ var OdyseeAPI = (function () {
                 }
 
                 if (cleanRelated.length < 6) {
-                    LbryRpc.call("claim_search", {
-                        claim_type: ["stream"],
-                        stream_types: ["video"],
+                    LbryRpc.call('claim_search', {
+                        claim_type: ['stream'],
+                        stream_types: ['video'],
                         page_size: 15,
                         has_no_source: false,
-                        fee_amount: "<=0",
+                        fee_amount: '<=0',
                         not_claim_ids: [currentClaimId],
                         not_tags: notTags,
-                        order_by: ["trending_group", "trending_mixed"]
+                        order_by: ['trending_group', 'trending_mixed']
                     }, ClaimFilter.filterPlayable(function (errTrending, resTrending) {
+                        var k;
+                        var trItem;
+
                         if (!errTrending && resTrending && resTrending.items) {
-                            for (var k = 0; k < resTrending.items.length; k++) {
-                                var trItem = resTrending.items[k];
+                            for (k = 0; k < resTrending.items.length; k++) {
+                                trItem = resTrending.items[k];
                                 if (trItem && trItem.claim_id && trItem.claim_id !== currentClaimId && !channelMap[trItem.claim_id] && !relatedMap[trItem.claim_id]) {
                                     relatedMap[trItem.claim_id] = true;
                                     cleanRelated.push(trItem);
@@ -300,46 +390,50 @@ var OdyseeAPI = (function () {
             }
 
             if (channelClaimId) {
-                pending++;
-                LbryRpc.call("claim_search", {
+                pending += 1;
+                LbryRpc.call('claim_search', {
                     channel_ids: [channelClaimId],
                     not_claim_ids: [currentClaimId],
-                    claim_type: ["stream"],
-                    stream_types: ["video"],
+                    claim_type: ['stream'],
+                    stream_types: ['video'],
                     page_size: 15,
                     has_no_source: false,
-                    fee_amount: "<=0",
+                    fee_amount: '<=0',
                     not_tags: notTags,
-                    order_by: ["release_time"]
+                    order_by: ['release_time']
                 }, ClaimFilter.filterPlayable(function (errCh, resCh) {
                     if (!errCh && resCh && resCh.items) {
                         channelItems = resCh.items;
                     }
-                    pending--;
-                    if (pending === 0) finish();
+                    pending -= 1;
+                    if (pending === 0) {
+                        finish();
+                    }
                 }));
             }
 
-            pending++;
-            var tagParams = {
-                claim_type: ["stream"],
-                stream_types: ["video"],
+            pending += 1;
+            tagParams = {
+                claim_type: ['stream'],
+                stream_types: ['video'],
                 page_size: 15,
                 has_no_source: false,
-                fee_amount: "<=0",
+                fee_amount: '<=0',
                 not_claim_ids: [currentClaimId],
                 not_tags: notTags,
-                order_by: ["trending_group", "trending_mixed"]
+                order_by: ['trending_group', 'trending_mixed']
             };
             if (tags.length > 0) {
                 tagParams.any_tags = tags;
             }
-            LbryRpc.call("claim_search", tagParams, ClaimFilter.filterPlayable(function (errTag, resTag) {
+            LbryRpc.call('claim_search', tagParams, ClaimFilter.filterPlayable(function (errTag, resTag) {
                 if (!errTag && resTag && resTag.items) {
                     tagItems = resTag.items;
                 }
-                pending--;
-                if (pending === 0) finish();
+                pending -= 1;
+                if (pending === 0) {
+                    finish();
+                }
             }));
         },
 
@@ -435,4 +529,4 @@ var OdyseeAPI = (function () {
             return UserData.getFollowingVideos(cb, page);
         }
     };
-})();
+}());

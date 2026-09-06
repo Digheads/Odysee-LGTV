@@ -10,6 +10,7 @@ var Feed = (function () {
     var isLoading = false;
     var hasMore = true;
     var isAppStartup = true;
+    var lastOpenedPlaylistId = null;
 
     // Infinite scrolling never released the cards. DOM nodes cannot be deleted
     // (the .video-card:nth-child(4n) rule would shift, causing scroll jumps),
@@ -18,36 +19,58 @@ var Feed = (function () {
     var IMG_KEEP_PX = 2500;
 
     function releaseOffscreenThumbs(scroller) {
-        if (!scroller) return;
-        var cards = scroller.querySelectorAll(".video-card"),
-            top = scroller.scrollTop,
-            bottom = top + scroller.clientHeight;
-        for (var i = 0; i < cards.length; i++) {
-            var card = cards[i],
-                img = card.querySelector("img.thumbnail");
-            if (!img) continue;
-            var far = (card.offsetTop + card.offsetHeight < top - IMG_KEEP_PX) ||
+        var cards;
+        var top;
+        var bottom;
+        var i;
+        var card;
+        var img;
+        var far;
+
+        if (!scroller) {
+            return;
+        }
+        cards = scroller.querySelectorAll('.video-card');
+        top = scroller.scrollTop;
+        bottom = top + scroller.clientHeight;
+        for (i = 0; i < cards.length; i++) {
+            card = cards[i];
+            img = card.querySelector('img.thumbnail');
+            if (!img) {
+                continue;
+            }
+            far = (card.offsetTop + card.offsetHeight < top - IMG_KEEP_PX) ||
                 (card.offsetTop > bottom + IMG_KEEP_PX);
-            if (far && img.getAttribute("src")) {
-                img.setAttribute("data-src", img.getAttribute("src"));
-                img.removeAttribute("src");
-            } else if (!far && !img.getAttribute("src") && img.getAttribute("data-src")) {
-                img.setAttribute("src", img.getAttribute("data-src"));
+            if (far && img.getAttribute('src')) {
+                img.setAttribute('data-src', img.getAttribute('src'));
+                img.removeAttribute('src');
+            } else if (!far && !img.getAttribute('src') && img.getAttribute('data-src')) {
+                img.setAttribute('src', img.getAttribute('data-src'));
             }
         }
     }
 
     function dispatchLoad(id, page, cb) {
-        if ("nav-trending" === id) return OdyseeAPI.getTrending(cb, page);
-        if ("nav-following" === id) return OdyseeAPI.getFollowingVideos(cb, page);
-        if ("nav-watch-later" === id) return OdyseeAPI.getWatchLaterVideos(cb, page);
-        if ("nav-search" === id) return OdyseeAPI.search(currentSearchQuery, cb, page);
-        if (0 === id.indexOf("cat:")) return OdyseeAPI.getCategory(id.substring(4), cb, page);
-        cb(new Error("Unknown view: " + id));
+        if (id === 'nav-trending') {
+            return OdyseeAPI.getTrending(cb, page);
+        }
+        if (id === 'nav-following') {
+            return OdyseeAPI.getFollowingVideos(cb, page);
+        }
+        if (id === 'nav-watch-later') {
+            return OdyseeAPI.getWatchLaterVideos(cb, page);
+        }
+        if (id === 'nav-search') {
+            return OdyseeAPI.search(currentSearchQuery, cb, page);
+        }
+        if (id.indexOf('cat:') === 0) {
+            return OdyseeAPI.getCategory(id.substring(4), cb, page);
+        }
+        cb(new Error('Unknown view: ' + id));
     }
 
-    function renderLoginView(t) {
-        t.innerHTML = '<div class="login-card">' +
+    function renderLoginView(containerEl) {
+        containerEl.innerHTML = '<div class="login-card">' +
             '<h2 class="login-title">Log in to your Odysee account</h2>' +
             '<p class="login-step">1. Go to the following address on your phone or computer:</p>' +
             '<div class="login-url">odysee.com/$/activate</div>' +
@@ -61,30 +84,41 @@ var Feed = (function () {
 
         SpatialNavigation.refresh();
 
-        if (window.Auth && typeof Auth.startDeviceFlow === "function") {
+        if (window.Auth && typeof Auth.startDeviceFlow === 'function') {
             Auth.startDeviceFlow(
                 function (info) {
-                    var codeBox = document.getElementById("login-code-box");
-                    if (codeBox) codeBox.textContent = info.userCode;
-                    var refreshBtn = document.getElementById("btn-login-refresh");
-                    if (refreshBtn) refreshBtn.style.display = "none";
+                    var codeBox = document.getElementById('login-code-box');
+                    var refreshBtn = document.getElementById('btn-login-refresh');
+
+                    if (codeBox) {
+                        codeBox.textContent = info.userCode;
+                    }
+                    if (refreshBtn) {
+                        refreshBtn.style.display = 'none';
+                    }
                 },
                 function (user) {
-                    var statusBox = document.getElementById("login-status-box");
-                    if (statusBox) statusBox.innerHTML = '<span style="color:#4ade80;">✓ Successful login!</span>';
+                    var statusBox = document.getElementById('login-status-box');
+
+                    if (statusBox) {
+                        statusBox.innerHTML = '<span style="color:#4ade80;">✓ Successful login!</span>';
+                    }
                     setTimeout(function () {
-                        loadPage("nav-profile");
+                        loadPage('nav-profile');
                     }, 1200);
                 },
                 function (err) {
-                    var statusBox = document.getElementById("login-status-box");
-                    if (statusBox) statusBox.innerHTML = '<span style="color:#f87171;">' + (err.message || "An activation error occurred.") + '</span>';
-                    var refreshBtn = document.getElementById("btn-login-refresh");
+                    var statusBox = document.getElementById('login-status-box');
+                    var refreshBtn = document.getElementById('btn-login-refresh');
+
+                    if (statusBox) {
+                        statusBox.innerHTML = '<span style="color:#f87171;">' + (err.message || 'An activation error occurred.') + '</span>';
+                    }
                     if (refreshBtn) {
-                        refreshBtn.style.display = "inline-block";
+                        refreshBtn.style.display = 'inline-block';
                         SpatialNavigation.refresh();
                         refreshBtn.onclick = function () {
-                            renderLoginView(t);
+                            renderLoginView(containerEl);
                         };
                     }
                 }
@@ -92,25 +126,58 @@ var Feed = (function () {
         }
     }
 
-    function renderProfileView(t) {
+    function renderProfileView(containerEl) {
         var user = (window.Auth && Auth.getUser) ? Auth.getUser() : {};
-        var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : { hideMature: true, hideShorts: true, hideYoutube: false };
+        var settings = (window.Auth && Auth.getSettings) ? Auth.getSettings() : {
+            hideMature: true,
+            hideShorts: true,
+            hideYoutube: false
+        };
 
-        var rawAvatar = (window.Auth && Auth.getAvatarUrl) ? Auth.getAvatarUrl() : (user.avatarUrl || "icons/spaceman.png");
+        var rawAvatar = (window.Auth && Auth.getAvatarUrl) ? Auth.getAvatarUrl() : (user.avatarUrl || 'icons/spaceman.png');
         var avatarSrc = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatar, 160) : rawAvatar;
-        var isSpaceman = (!avatarSrc || avatarSrc === "icons/spaceman.png");
-        var chName = user ? (user.channelName || "") : "";
-        var avatarColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : "transparent";
+        var isSpaceman = (!avatarSrc || avatarSrc === 'icons/spaceman.png');
+        var chName = user ? (user.channelName || '') : '';
+        var avatarColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : 'transparent';
 
-        var displayName = user.channelName || (user.email ? user.email.split("@")[0] : "Odysee User");
-        if (0 !== displayName.indexOf("@") && user.channelName) displayName = "@" + displayName;
-        var emailDisplay = user.email || "";
-        var followersText = (user.followers || 0) + " followers";
+        var displayName = user.channelName || (user.email ? user.email.split('@')[0] : 'Odysee User');
+        var emailDisplay = user.email || '';
+        var followersText = (user.followers || 0) + ' followers';
 
         var wrapStyle = isSpaceman ? ' style="background-color: ' + avatarColor + ';"' : '';
         var imgStyle = isSpaceman ? ' style="background-color: ' + avatarColor + ';"' : '';
 
-        var html = '<div class="profile-view">' +
+        var html;
+        var logoutBtn;
+
+        function setupToggle(btnId, settingKey) {
+            var btn = document.getElementById(btnId);
+
+            if (!btn) {
+                return;
+            }
+            btn.addEventListener('click', function () {
+                var currentVal = !!settings[settingKey];
+                var nextVal = !currentVal;
+
+                settings[settingKey] = nextVal;
+                if (window.Auth && Auth.updateSetting) {
+                    Auth.updateSetting(settingKey, nextVal);
+                }
+                btn.textContent = nextVal ? 'ON' : 'OFF';
+                if (nextVal) {
+                    btn.classList.add('toggle-active');
+                } else {
+                    btn.classList.remove('toggle-active');
+                }
+            });
+        }
+
+        if (displayName.indexOf('@') !== 0 && user.channelName) {
+            displayName = '@' + displayName;
+        }
+
+        html = '<div class="profile-view">' +
             '<div class="profile-header-card">' +
             '<div class="profile-avatar-wrap"' + wrapStyle + '>' +
             '<img src="' + avatarSrc + '" class="profile-avatar-img"' + imgStyle + ' alt="Avatar" onerror="this.src=\'icons/spaceman.png\'">' +
@@ -160,47 +227,28 @@ var Feed = (function () {
             '</div>' +
             '</div>';
 
-        t.innerHTML = html;
+        containerEl.innerHTML = html;
         SpatialNavigation.refresh();
 
-        var logoutBtn = document.getElementById("btn-logout");
+        logoutBtn = document.getElementById('btn-logout');
         if (logoutBtn) {
-            logoutBtn.addEventListener("click", function () {
+            logoutBtn.addEventListener('click', function () {
                 if (window.Auth && Auth.logout) {
                     Auth.logout(function () {
-                        loadPage("nav-trending");
+                        loadPage('nav-trending');
                     });
                 }
             });
         }
 
-        function setupToggle(btnId, settingKey) {
-            var btn = document.getElementById(btnId);
-            if (!btn) return;
-            btn.addEventListener("click", function () {
-                var currentVal = !!settings[settingKey];
-                var nextVal = !currentVal;
-                settings[settingKey] = nextVal;
-                if (window.Auth && Auth.updateSetting) {
-                    Auth.updateSetting(settingKey, nextVal);
-                }
-                btn.textContent = nextVal ? "ON" : "OFF";
-                if (nextVal) {
-                    btn.classList.add("toggle-active");
-                } else {
-                    btn.classList.remove("toggle-active");
-                }
-            });
-        }
-
-        setupToggle("toggle-mature", "hideMature");
-        setupToggle("toggle-shorts", "hideShorts");
-        setupToggle("toggle-youtube", "hideYoutube");
+        setupToggle('toggle-mature', 'hideMature');
+        setupToggle('toggle-shorts', 'hideShorts');
+        setupToggle('toggle-youtube', 'hideYoutube');
 
         setTimeout(function () {
             if (logoutBtn) {
                 logoutBtn.focus();
-                if (window.SpatialNavigation && typeof SpatialNavigation.focusNode === "function") {
+                if (window.SpatialNavigation && typeof SpatialNavigation.focusNode === 'function') {
                     SpatialNavigation.refresh();
                     SpatialNavigation.focusNode(logoutBtn);
                 }
@@ -211,31 +259,41 @@ var Feed = (function () {
     window.isPlaylistDetailOpen = false;
     window.currentOpenPlaylist = null;
 
-    function renderPlaylistsView(t) {
+    function renderPlaylistsView(containerEl) {
+        var loadingEl;
+
         window.isPlaylistDetailOpen = false;
         window.currentOpenPlaylist = null;
 
-        var loadingEl = document.getElementById("loading");
-        if (loadingEl) loadingEl.style.display = "block";
-        t.innerHTML = "";
+        loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'block';
+        }
+        containerEl.innerHTML = '';
 
         SpatialNavigation.refresh();
 
-        if (window.OdyseeAPI && typeof OdyseeAPI.getPlaylists === "function") {
+        if (window.OdyseeAPI && typeof OdyseeAPI.getPlaylists === 'function') {
             OdyseeAPI.getPlaylists(function (err, playlists) {
-                if (loadingEl) loadingEl.style.display = "none";
+                var html;
+                var grid;
+                var i;
+
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
 
                 if (err) {
-                    t.innerHTML = '<div class="playlists-empty">' +
+                    containerEl.innerHTML = '<div class="playlists-empty">' +
                         '<h3>Failed to load playlists</h3>' +
-                        '<p>' + (err.message || "An error occurred.") + '</p>' +
+                        '<p>' + (err.message || 'An error occurred.') + '</p>' +
                         '</div>';
                     SpatialNavigation.refresh();
                     return;
                 }
 
                 if (!playlists || !playlists.length) {
-                    t.innerHTML = '<div class="playlists-empty">' +
+                    containerEl.innerHTML = '<div class="playlists-empty">' +
                         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 20px;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>' +
                         '<h3>No playlists found</h3>' +
                         '<p>Playlists and Watch Later from your Odysee account will appear here.</p>' +
@@ -244,23 +302,23 @@ var Feed = (function () {
                     return;
                 }
 
-                var html = '<div class="playlists-container">' +
+                html = '<div class="playlists-container">' +
                     '<div class="playlists-grid" id="playlists-grid"></div>' +
                     '</div>';
-                t.innerHTML = html;
+                containerEl.innerHTML = html;
 
-                var grid = document.getElementById("playlists-grid");
-                for (var i = 0; i < playlists.length; i++) {
+                grid = document.getElementById('playlists-grid');
+                for (i = 0; i < playlists.length; i++) {
                     (function (pl) {
-                        var card = document.createElement("div");
-                        card.className = "playlist-card focusable";
-                        card.tabIndex = 0;
-                        card.setAttribute("data-id", pl.id);
-
+                        var card = document.createElement('div');
                         var hasVideo = pl.itemCount > 0 && pl.items && pl.items.length > 0;
-                        var thumbSrc = (hasVideo && pl.thumbnailUrl) ? (Utils.thumbUrl(pl.thumbnailUrl, 400)) : "icons/missing-thumb.png";
-                        var countText = pl.itemCount + (pl.itemCount === 1 ? " video" : " videos");
-                        var badgeText = pl.badge || "Playlist";
+                        var thumbSrc = (hasVideo && pl.thumbnailUrl) ? (Utils.thumbUrl(pl.thumbnailUrl, 400)) : 'icons/missing-thumb.png';
+                        var countText = pl.itemCount + (pl.itemCount === 1 ? ' video' : ' videos');
+                        var badgeText = pl.badge || 'Playlist';
+
+                        card.className = 'playlist-card focusable';
+                        card.tabIndex = 0;
+                        card.setAttribute('data-id', pl.id);
 
                         card.innerHTML = '<div class="playlist-thumb-wrap">' +
                             '<img class="playlist-thumb" src="' + Utils.escapeHtml(thumbSrc) + '" onerror="this.src=\'icons/missing-thumb.png\'" />' +
@@ -275,60 +333,74 @@ var Feed = (function () {
                             '<div class="playlist-subtitle">' + countText + '</div>' +
                             '</div>';
 
-                        card.addEventListener("click", function () {
-                            openPlaylistDetail(pl, t);
+                        card.addEventListener('click', function () {
+                            openPlaylistDetail(pl, containerEl);
                         });
 
                         grid.appendChild(card);
-                    })(playlists[i]);
+                    }(playlists[i]));
                 }
 
                 SpatialNavigation.refresh();
                 setTimeout(function () {
+                    var target;
+                    var firstCard;
+                    var activeMenu;
+
                     if (lastOpenedPlaylistId) {
-                        var target = grid.querySelector('.playlist-card[data-id="' + lastOpenedPlaylistId + '"]');
+                        target = grid.querySelector('.playlist-card[data-id="' + lastOpenedPlaylistId + '"]');
                         if (target) {
                             SpatialNavigation.focusNode(target);
                             lastOpenedPlaylistId = null;
                             return;
                         }
                     }
-                    var firstCard = grid.querySelector(".playlist-card");
-                    if (firstCard) SpatialNavigation.focusNode(firstCard);
-                    else {
-                        var activeMenu = document.querySelector(".nav-item.active");
-                        if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                    firstCard = grid.querySelector('.playlist-card');
+                    if (firstCard) {
+                        SpatialNavigation.focusNode(firstCard);
+                    } else {
+                        activeMenu = document.querySelector('.nav-item.active');
+                        if (activeMenu) {
+                            SpatialNavigation.focusNode(activeMenu);
+                        }
                     }
                 }, 100);
             });
         }
     }
 
-    var lastOpenedPlaylistId = null;
-
-    function openPlaylistDetail(playlist, t) {
+    function openPlaylistDetail(playlist, containerEl) {
         window.isPlaylistDetailOpen = true;
         window.currentOpenPlaylist = playlist;
         lastOpenedPlaylistId = playlist.id;
 
         try {
-            history.pushState({ playlistDetail: true }, "", "");
+            history.pushState({ playlistDetail: true }, '', '');
         } catch (e) {}
 
-        t.innerHTML = '<div class="playlist-detail-container">' +
+        containerEl.innerHTML = '<div class="playlist-detail-container">' +
             '<div id="playlist-detail-loading" class="loading-spinner" style="display: block;">Loading...</div>' +
             '<div class="playlist-detail-grid" id="playlist-detail-grid"></div>' +
             '</div>';
 
         SpatialNavigation.refresh();
 
-        if (window.OdyseeAPI && typeof OdyseeAPI.getPlaylistVideos === "function") {
+        if (window.OdyseeAPI && typeof OdyseeAPI.getPlaylistVideos === 'function') {
             OdyseeAPI.getPlaylistVideos(playlist, function (err, res) {
-                var loadingEl = document.getElementById("playlist-detail-loading");
-                if (loadingEl) loadingEl.style.display = "none";
+                var loadingEl = document.getElementById('playlist-detail-loading');
+                var grid;
+                var activeMenu;
+                var i;
+                var card;
 
-                var grid = document.getElementById("playlist-detail-grid");
-                if (!grid) return;
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
+
+                grid = document.getElementById('playlist-detail-grid');
+                if (!grid) {
+                    return;
+                }
 
                 if (err || !res || !res.items || !res.items.length) {
                     grid.innerHTML = '<div class="playlists-empty">' +
@@ -336,24 +408,33 @@ var Feed = (function () {
                         '<p>Videos in this playlist will appear here.</p>' +
                         '</div>';
                     SpatialNavigation.refresh();
-                    var activeMenu = document.querySelector(".nav-item.active");
-                    if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                    activeMenu = document.querySelector('.nav-item.active');
+                    if (activeMenu) {
+                        SpatialNavigation.focusNode(activeMenu);
+                    }
                     return;
                 }
 
-                grid.innerHTML = "";
-                for (var i = 0; i < res.items.length; i++) {
-                    var card = createVideoCard(res.items[i]);
-                    if (card) grid.appendChild(card);
+                grid.innerHTML = '';
+                for (i = 0; i < res.items.length; i++) {
+                    card = createVideoCard(res.items[i]);
+                    if (card) {
+                        grid.appendChild(card);
+                    }
                 }
 
                 SpatialNavigation.refresh();
                 setTimeout(function () {
-                    var firstCard = grid.querySelector(".video-card");
-                    if (firstCard) SpatialNavigation.focusNode(firstCard);
-                    else {
-                        var activeMenu = document.querySelector(".nav-item.active");
-                        if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                    var firstCard = grid.querySelector('.video-card');
+                    var menuEl;
+
+                    if (firstCard) {
+                        SpatialNavigation.focusNode(firstCard);
+                    } else {
+                        menuEl = document.querySelector('.nav-item.active');
+                        if (menuEl) {
+                            SpatialNavigation.focusNode(menuEl);
+                        }
                     }
                 }, 100);
             }, 1);
@@ -361,140 +442,74 @@ var Feed = (function () {
     }
 
     function closePlaylistDetail(noRefresh, fromPopstate) {
-        if (!window.isPlaylistDetailOpen) return;
+        var videoGridEl;
+
+        if (!window.isPlaylistDetailOpen) {
+            return;
+        }
         window.isPlaylistDetailOpen = false;
         window.currentOpenPlaylist = null;
 
         if (!fromPopstate && window.history && history.state && history.state.playlistDetail) {
-            try { history.back(); } catch (e) {}
+            try {
+                history.back();
+            } catch (e) {}
         }
 
         if (!noRefresh) {
-            var t = document.getElementById("video-grid");
-            if (t) renderPlaylistsView(t);
+            videoGridEl = document.getElementById('video-grid');
+            if (videoGridEl) {
+                renderPlaylistsView(videoGridEl);
+            }
         }
     }
 
-    function loadPage(e) {
-        if (typeof Channel !== "undefined" && Channel && typeof Channel.close === "function") {
-            Channel.close(true);
-        } else if (window.Channel && typeof window.Channel.close === "function") {
-            window.Channel.close(true);
-        } else if (typeof window.closeChannelPage === "function") {
-            window.closeChannelPage(true);
-        }
-        window.isChannelPageOpen = false;
+    function loadPage(navId) {
+        var cpEl;
+        var vgEl;
+        var topHdr;
+        var videoGridEl;
+        var loadingEl;
+        var searchContainerEl;
+        var searchInputEl;
 
-        var cpEl = document.getElementById("channel-page");
-        if (cpEl) cpEl.style.display = "none";
-        var vgEl = document.getElementById("video-grid");
-        if (vgEl) vgEl.style.display = "";
-        var topHdr = document.querySelector(".top-header");
-        if (topHdr) topHdr.style.display = "block";
+        function handleLoaded(err, res) {
+            var msg;
+            var activeMenu;
+            var i;
+            var card;
+            var firstVideo;
 
-        try {
-            if (history.state && history.state.channelPage) {
-                history.replaceState(null, "", "");
-            }
-        } catch (err) { }
-
-        if (window.isPlaylistDetailOpen) {
-            closePlaylistDetail(true, true);
-        }
-        window.isPlaylistDetailOpen = false;
-        try {
-            if (history.state && history.state.playlistDetail) {
-                history.replaceState(null, "", "");
-            }
-        } catch (err) { }
-
-        var t = document.getElementById("video-grid"),
-            n = document.getElementById("loading"),
-            o = document.getElementById("search-container"),
-            a = document.getElementById("search-input");
-
-        currentPage = 1;
-        currentCategory = e;
-        currentSearchQuery = '';
-        hasMore = true;
-        isLoading = true;
-
-        if (window.Navigation && typeof Navigation.setActive === "function") {
-            Navigation.setActive(e);
-        }
-
-        if (window.SpatialNavigation && typeof SpatialNavigation.lock === "function") {
-            SpatialNavigation.lock();
-        }
-
-        if (t.innerHTML = "", n.style.display = "block", "nav-search" === e) {
             isLoading = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
-            Utils.setDisplayFlex(o);
-            n.style.display = "none";
-            SpatialNavigation.refresh();
-            if (a) {
-                setTimeout(function () {
-                    a.focus();
-                }, 100);
-            }
-            return;
-        }
-
-        if ("nav-login" === e) {
-            isLoading = false;
-            hasMore = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
-            o.style.display = "none";
-            n.style.display = "none";
-            renderLoginView(t);
-            return;
-        }
-
-        if ("nav-profile" === e) {
-            isLoading = false;
-            hasMore = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
-            o.style.display = "none";
-            n.style.display = "none";
-            renderProfileView(t);
-            return;
-        }
-
-        if ("nav-playlists" === e) {
-            isLoading = false;
-            hasMore = false;
-            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === "function") SpatialNavigation.unlock();
-            o.style.display = "none";
-            renderPlaylistsView(t);
-            return;
-        }
-
-        function r(err, res) {
-            isLoading = false;
-            n.style.display = "none";
+            loadingEl.style.display = 'none';
             if (err) {
-                var msg = err.message || ("string" == typeof err ? err : JSON.stringify(err));
-                t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. ' + msg + "</div>";
+                msg = err.message || (typeof err === 'string' ? err : JSON.stringify(err));
+                videoGridEl.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Failed to load content. ' + msg + '</div>';
                 console.error(err);
                 if (window.SpatialNavigation) {
                     SpatialNavigation.refresh();
-                    var activeMenu = document.querySelector(".nav-item.active");
-                    if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                    activeMenu = document.querySelector('.nav-item.active');
+                    if (activeMenu) {
+                        SpatialNavigation.focusNode(activeMenu);
+                    }
                     SpatialNavigation.unlock();
                 }
                 return;
             }
             if (res && res.items && res.items.length > 0) {
-                if ((res.raw_count !== undefined ? res.raw_count : res.items.length) < 20) hasMore = false;
-                for (var i = 0; i < res.items.length; i++) {
-                    var card = createVideoCard(res.items[i]);
-                    if (card) t.appendChild(card);
+                if ((res.raw_count !== undefined ? res.raw_count : res.items.length) < 20) {
+                    hasMore = false;
+                }
+                for (i = 0; i < res.items.length; i++) {
+                    card = createVideoCard(res.items[i]);
+                    if (card) {
+                        videoGridEl.appendChild(card);
+                    }
                 }
             } else {
                 hasMore = false;
-                if (currentPage === 1 && e === "nav-following") {
-                    t.innerHTML = '<div class="playlists-empty" style="margin-top: 60px;">' +
+                if (currentPage === 1 && navId === 'nav-following') {
+                    videoGridEl.innerHTML = '<div class="playlists-empty" style="margin-top: 60px;">' +
                         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 20px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>' +
                         '<h3>No videos from followed channels</h3>' +
                         '<p>Follow channels on Odysee to see their latest uploads here.</p>' +
@@ -504,12 +519,14 @@ var Feed = (function () {
             if (window.SpatialNavigation) {
                 SpatialNavigation.refresh();
                 if (currentPage === 1) {
-                    var firstVideo = t.querySelector(".video-card");
+                    firstVideo = videoGridEl.querySelector('.video-card');
                     if (firstVideo) {
                         SpatialNavigation.focusNode(firstVideo);
                     } else {
-                        var activeMenu = document.querySelector(".nav-item.active");
-                        if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                        activeMenu = document.querySelector('.nav-item.active');
+                        if (activeMenu) {
+                            SpatialNavigation.focusNode(activeMenu);
+                        }
                     }
                     isAppStartup = false;
                 }
@@ -517,15 +534,129 @@ var Feed = (function () {
             }
         }
 
-        o.style.display = "none";
-        dispatchLoad(e, currentPage, r);
+        if (typeof Channel !== 'undefined' && Channel && typeof Channel.close === 'function') {
+            Channel.close(true);
+        } else if (window.Channel && typeof window.Channel.close === 'function') {
+            window.Channel.close(true);
+        } else if (typeof window.closeChannelPage === 'function') {
+            window.closeChannelPage(true);
+        }
+        window.isChannelPageOpen = false;
+
+        cpEl = document.getElementById('channel-page');
+        if (cpEl) {
+            cpEl.style.display = 'none';
+        }
+        vgEl = document.getElementById('video-grid');
+        if (vgEl) {
+            vgEl.style.display = '';
+        }
+        topHdr = document.querySelector('.top-header');
+        if (topHdr) {
+            topHdr.style.display = 'block';
+        }
+
+        try {
+            if (history.state && history.state.channelPage) {
+                history.replaceState(null, '', '');
+            }
+        } catch (err) { }
+
+        if (window.isPlaylistDetailOpen) {
+            closePlaylistDetail(true, true);
+        }
+        window.isPlaylistDetailOpen = false;
+        try {
+            if (history.state && history.state.playlistDetail) {
+                history.replaceState(null, '', '');
+            }
+        } catch (err) { }
+
+        videoGridEl = document.getElementById('video-grid');
+        loadingEl = document.getElementById('loading');
+        searchContainerEl = document.getElementById('search-container');
+        searchInputEl = document.getElementById('search-input');
+
+        currentPage = 1;
+        currentCategory = navId;
+        currentSearchQuery = '';
+        hasMore = true;
+        isLoading = true;
+
+        if (window.Navigation && typeof Navigation.setActive === 'function') {
+            Navigation.setActive(navId);
+        }
+
+        if (window.SpatialNavigation && typeof SpatialNavigation.lock === 'function') {
+            SpatialNavigation.lock();
+        }
+
+        videoGridEl.innerHTML = '';
+        loadingEl.style.display = 'block';
+
+        if (navId === 'nav-search') {
+            isLoading = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
+                SpatialNavigation.unlock();
+            }
+            Utils.setDisplayFlex(searchContainerEl);
+            loadingEl.style.display = 'none';
+            SpatialNavigation.refresh();
+            if (searchInputEl) {
+                setTimeout(function () {
+                    searchInputEl.focus();
+                }, 100);
+            }
+            return;
+        }
+
+        if (navId === 'nav-login') {
+            isLoading = false;
+            hasMore = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
+                SpatialNavigation.unlock();
+            }
+            searchContainerEl.style.display = 'none';
+            loadingEl.style.display = 'none';
+            renderLoginView(videoGridEl);
+            return;
+        }
+
+        if (navId === 'nav-profile') {
+            isLoading = false;
+            hasMore = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
+                SpatialNavigation.unlock();
+            }
+            searchContainerEl.style.display = 'none';
+            loadingEl.style.display = 'none';
+            renderProfileView(videoGridEl);
+            return;
+        }
+
+        if (navId === 'nav-playlists') {
+            isLoading = false;
+            hasMore = false;
+            if (window.SpatialNavigation && typeof SpatialNavigation.unlock === 'function') {
+                SpatialNavigation.unlock();
+            }
+            searchContainerEl.style.display = 'none';
+            loadingEl.style.display = 'none';
+            renderPlaylistsView(videoGridEl);
+            return;
+        }
+
+        searchContainerEl.style.display = 'none';
+        dispatchLoad(navId, currentPage, handleLoaded);
     }
 
     function doSearch(query) {
-        var t = document.getElementById("video-grid"),
-            n = document.getElementById("loading");
+        var videoGridEl = document.getElementById('video-grid');
+        var loadingEl = document.getElementById('loading');
 
-        if (isLoading && currentSearchQuery === query) return;
+        if (isLoading && currentSearchQuery === query) {
+            return;
+        }
 
         currentPage = 1;
         currentCategory = 'nav-search';
@@ -533,59 +664,86 @@ var Feed = (function () {
         hasMore = true;
         isLoading = true;
 
-        t.innerHTML = "";
-        n.style.display = "block";
+        videoGridEl.innerHTML = '';
+        loadingEl.style.display = 'block';
 
         OdyseeAPI.search(query, function (err, res) {
+            var msg;
+            var i;
+            var card;
+            var first;
+
             isLoading = false;
-            n.style.display = "none";
+            loadingEl.style.display = 'none';
             if (err) {
-                var msg = err.message || ("string" == typeof err ? err : JSON.stringify(err));
-                t.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Search failed. ' + msg + "</div>";
+                msg = err.message || (typeof err === 'string' ? err : JSON.stringify(err));
+                videoGridEl.innerHTML = '<div class="error" style="padding: 20px; color: #ff5555; font-size: 24px;">Search failed. ' + msg + '</div>';
                 console.error(err);
                 SpatialNavigation.refresh();
                 return;
             }
             if (res && res.items && res.items.length > 0) {
-                if ((res.raw_count !== undefined ? res.raw_count : res.items.length) < 20) hasMore = false;
-                for (var i = 0; i < res.items.length; i++) {
-                    var card = createVideoCard(res.items[i]);
-                    if (card) t.appendChild(card);
+                if ((res.raw_count !== undefined ? res.raw_count : res.items.length) < 20) {
+                    hasMore = false;
+                }
+                for (i = 0; i < res.items.length; i++) {
+                    card = createVideoCard(res.items[i]);
+                    if (card) {
+                        videoGridEl.appendChild(card);
+                    }
                 }
             } else {
                 hasMore = false;
-                t.innerHTML = '<div style="color:white;text-align:center;width:100%;font-size:24px;margin-top:50px;">No results found.</div>';
+                videoGridEl.innerHTML = '<div style="color:white;text-align:center;width:100%;font-size:24px;margin-top:50px;">No results found.</div>';
             }
             SpatialNavigation.refresh();
             setTimeout(function () {
-                var first = t.querySelector(".video-card");
-                if (first) first.focus();
+                first = videoGridEl.querySelector('.video-card');
+                if (first) {
+                    first.focus();
+                }
             }, 100);
         }, currentPage);
     }
 
     function loadMoreContent() {
-        if (isLoading || !hasMore || (currentCategory === 'nav-search' && !currentSearchQuery)) return;
+        var loadingEl;
+        var videoGridEl;
+
+        if (isLoading || !hasMore || (currentCategory === 'nav-search' && !currentSearchQuery)) {
+            return;
+        }
 
         isLoading = true;
-        currentPage++;
-        var n = document.getElementById("loading");
-        if (n) n.style.display = "block";
+        currentPage += 1;
+        loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'block';
+        }
 
-        var t = document.getElementById("video-grid");
+        videoGridEl = document.getElementById('video-grid');
 
         function appendCards(err, res) {
+            var i;
+            var card;
+
             isLoading = false;
-            if (n) n.style.display = "none";
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
             if (err) {
-                console.error("Load more failed", err);
+                console.error('Load more failed', err);
                 return;
             }
             if (res && res.items && res.items.length > 0) {
-                if ((res.raw_count !== undefined ? res.raw_count : res.items.length) < 20) hasMore = false;
-                for (var i = 0; i < res.items.length; i++) {
-                    var card = createVideoCard(res.items[i]);
-                    if (card) t.appendChild(card);
+                if ((res.raw_count !== undefined ? res.raw_count : res.items.length) < 20) {
+                    hasMore = false;
+                }
+                for (i = 0; i < res.items.length; i++) {
+                    card = createVideoCard(res.items[i]);
+                    if (card) {
+                        videoGridEl.appendChild(card);
+                    }
                 }
                 SpatialNavigation.refresh();
             } else {
@@ -597,96 +755,48 @@ var Feed = (function () {
     }
 
     function triggerPlayVideo(claim) {
-        if (window.Player && typeof Player.playVideo === "function") {
+        if (window.Player && typeof Player.playVideo === 'function') {
             Player.playVideo(claim);
-        } else if (typeof playVideo === "function") {
+        } else if (typeof playVideo === 'function') {
             playVideo(claim);
         }
     }
 
     function triggerOpenChannel(channel) {
-        if (window.Channel && typeof Channel.open === "function") {
+        if (window.Channel && typeof Channel.open === 'function') {
             Channel.open(channel);
-        } else if (typeof window.openChannelPage === "function") {
+        } else if (typeof window.openChannelPage === 'function') {
             window.openChannelPage(channel);
         }
     }
 
-    function createVideoCard(e) {
-        if (!e.value) return null;
-        var t = e.value.title || "Untitled",
-            n = Utils.thumbUrl(e.value.thumbnail ? e.value.thumbnail.url : "");
-        var chName = e.signing_channel ? (e.signing_channel.name || "") : "";
-        var i = e.signing_channel && e.signing_channel.value ? e.signing_channel.value.title || e.signing_channel.name : (chName || "Unknown");
-        var rawAvatarUrl = e.signing_channel && e.signing_channel.value && e.signing_channel.value.thumbnail ? e.signing_channel.value.thumbnail.url : "";
-        var avatarUrl = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatarUrl, 64) : "icons/spaceman.png";
-        var isSpaceman = (!avatarUrl || avatarUrl === "icons/spaceman.png");
-        var chColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : "transparent";
-        var ts = e.value && e.value.release_time ? e.value.release_time : (e.meta && e.meta.creation_timestamp ? e.meta.creation_timestamp : 0);
-        var uploadDate = Utils.formatRelativeTime(ts);
+    function createVideoCard(claim) {
+        var title;
+        var thumb;
+        var chName;
+        var channelTitle;
+        var rawAvatarUrl;
+        var avatarUrl;
+        var isSpaceman;
+        var chColor;
+        var ts;
+        var uploadDate;
+        var duration;
+        var durationText;
+        var h;
+        var m;
+        var s;
+        var durationHtml;
+        var progressHtml;
+        var rp;
+        var pct;
+        var cardEl;
+        var avatarHtml;
+        var ptrIsDown;
+        var ptrTimer;
+        var ptrLongPressed;
 
-        var duration = e.value && e.value.video ? e.value.video.duration : 0;
-        var durationText = "";
-        if (duration > 0) {
-            var h = Math.floor(duration / 3600);
-            var m = Math.floor((duration % 3600) / 60);
-            var s = duration % 60;
-            if (h > 0) {
-                durationText = h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
-            } else {
-                durationText = m + ":" + (s < 10 ? "0" : "") + s;
-            }
-        }
-        var durationHtml = durationText ? '<div class="duration-overlay">' + durationText + '</div>' : '';
-
-        // Resume progress bar
-        var progressHtml = '';
-        if (e.claim_id && window.UserData && typeof UserData.getResumePoint === "function") {
-            var rp = UserData.getResumePoint(e.claim_id);
-            if (rp && rp.time > 0 && rp.duration > 0) {
-                var pct = Math.min(Math.round((rp.time / rp.duration) * 100), 100);
-                if (pct > 0 && pct < 100) {
-                    progressHtml = '<div class="resume-progress-bar"><div class="resume-progress-fill" style="width:' + pct + '%"></div></div>';
-                }
-            }
-        }
-
-        var o = document.createElement("div");
-        o.tabIndex = 0;
-        o.className = "video-card focusable";
-
-        var avatarHtml = '<img class="channel-avatar" src="' + Utils.escapeHtml(avatarUrl) + '" style="background-color:' + chColor + ';" onerror="this.src=\'icons/spaceman.png\'" />';
-        o.innerHTML = '<div class="thumbnail-wrapper"><img class="thumbnail" src="' + Utils.escapeHtml(n) + '" />' + durationHtml + progressHtml + '</div><div class="info"><div class="title">' + Utils.escapeHtml(t) + '</div><div class="channel-meta">' + avatarHtml + '<div class="channel-text"><div class="channel">' + Utils.escapeHtml(i) + '</div><div class="card-date">' + Utils.escapeHtml(uploadDate) + '</div></div></div></div>';
-
-        var ptrIsDown = false;
-        var ptrTimer = null;
-        var ptrLongPressed = false;
-
-        o.addEventListener("mousedown", function (ev) {
-            ptrIsDown = true;
-            ptrLongPressed = false;
-            ptrTimer = setTimeout(function () {
-                ptrLongPressed = true;
-                if (e.signing_channel) {
-                    window.lastFocusedCard = o;
-                    triggerOpenChannel(e.signing_channel);
-                }
-            }, 1200);
-        });
-
-        o.addEventListener("touchstart", function (ev) {
-            ptrIsDown = true;
-            ptrLongPressed = false;
-            ptrTimer = setTimeout(function () {
-                ptrLongPressed = true;
-                if (e.signing_channel) {
-                    window.lastFocusedCard = o;
-                    triggerOpenChannel(e.signing_channel);
-                }
-            }, 1200);
-        });
-
-        function cancelPointer(ev) {
+        function cancelPointer() {
             if (ptrIsDown) {
                 ptrIsDown = false;
                 if (ptrTimer) {
@@ -694,81 +804,168 @@ var Feed = (function () {
                     ptrTimer = null;
                 }
                 if (!ptrLongPressed) {
-                    window.lastFocusedCard = o;
-                    triggerPlayVideo(e);
+                    window.lastFocusedCard = cardEl;
+                    triggerPlayVideo(claim);
                 }
             }
         }
 
-        o.addEventListener("mouseup", cancelPointer);
-        o.addEventListener("touchend", cancelPointer);
+        if (!claim.value) {
+            return null;
+        }
 
-        o.addEventListener("mouseleave", function () {
-            ptrIsDown = false;
-            if (ptrTimer) {
-                clearTimeout(ptrTimer);
-                ptrTimer = null;
-            }
-        });
+        title = claim.value.title || 'Untitled';
+        thumb = Utils.thumbUrl(claim.value.thumbnail ? claim.value.thumbnail.url : '');
+        chName = claim.signing_channel ? (claim.signing_channel.name || '') : '';
+        channelTitle = claim.signing_channel && claim.signing_channel.value ? claim.signing_channel.value.title || claim.signing_channel.name : (chName || 'Unknown');
+        rawAvatarUrl = claim.signing_channel && claim.signing_channel.value && claim.signing_channel.value.thumbnail ? claim.signing_channel.value.thumbnail.url : '';
+        avatarUrl = (window.Utils && Utils.getAvatarSrc) ? Utils.getAvatarSrc(rawAvatarUrl, 64) : 'icons/spaceman.png';
+        isSpaceman = (!avatarUrl || avatarUrl === 'icons/spaceman.png');
+        chColor = (isSpaceman && window.Utils && Utils.getAvatarColor) ? Utils.getAvatarColor(chName) : 'transparent';
+        ts = claim.value && claim.value.release_time ? claim.value.release_time : (claim.meta && claim.meta.creation_timestamp ? claim.meta.creation_timestamp : 0);
+        uploadDate = Utils.formatRelativeTime(ts);
 
-        o.addEventListener("touchcancel", function () {
-            ptrIsDown = false;
-            if (ptrTimer) {
-                clearTimeout(ptrTimer);
-                ptrTimer = null;
-            }
-        });
-
-        o.addEventListener("longpress", function () {
-            if (e.signing_channel) {
-                window.lastFocusedCard = o;
-                triggerOpenChannel(e.signing_channel);
-            }
-        });
-
-        o.addEventListener("click", function (ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-
-            if (ptrIsDown || ptrLongPressed || window._spatialOkLongPressed) return;
-            if (ev.screenX > 0 || ev.screenY > 0) return;
-
-            if (!window.isChannelPageOpen) {
-                window.lastFocusedCard = o;
+        duration = claim.value && claim.value.video ? claim.value.video.duration : 0;
+        durationText = '';
+        if (duration > 0) {
+            h = Math.floor(duration / 3600);
+            m = Math.floor((duration % 3600) / 60);
+            s = duration % 60;
+            if (h > 0) {
+                durationText = h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
             } else {
-                window.lastFocusedChannelCard = o;
+                durationText = m + ':' + (s < 10 ? '0' : '') + s;
             }
-            triggerPlayVideo(e);
-        });
+        }
+        durationHtml = durationText ? '<div class="duration-overlay">' + durationText + '</div>' : '';
 
-        return o;
-    }
-
-    function initSearch() {
-        var n = document.getElementById("btn-search"),
-            i = document.getElementById("search-input");
-
-        function triggerSearch() {
-            if (!i) return;
-            var e = i.value.trim();
-            if (e.length > 0) {
-                i.blur();
-                var btn = document.getElementById("btn-search");
-                if (btn) SpatialNavigation.focusNode(btn);
-                doSearch(e);
+        // Resume progress bar
+        progressHtml = '';
+        if (claim.claim_id && window.UserData && typeof UserData.getResumePoint === 'function') {
+            rp = UserData.getResumePoint(claim.claim_id);
+            if (rp && rp.time > 0 && rp.duration > 0) {
+                pct = Math.min(Math.round((rp.time / rp.duration) * 100), 100);
+                if (pct > 0 && pct < 100) {
+                    progressHtml = '<div class="resume-progress-bar"><div class="resume-progress-fill" style="width:' + pct + '%"></div></div>';
+                }
             }
         }
 
-        if (n && i) {
-            n.addEventListener("click", triggerSearch);
-            i.addEventListener("keydown", function (e) {
+        cardEl = document.createElement('div');
+        cardEl.tabIndex = 0;
+        cardEl.className = 'video-card focusable';
+
+        avatarHtml = '<img class="channel-avatar" src="' + Utils.escapeHtml(avatarUrl) + '" style="background-color:' + chColor + ';" onerror="this.src=\'icons/spaceman.png\'" />';
+        cardEl.innerHTML = '<div class="thumbnail-wrapper"><img class="thumbnail" src="' + Utils.escapeHtml(thumb) + '" />' + durationHtml + progressHtml + '</div><div class="info"><div class="title">' + Utils.escapeHtml(title) + '</div><div class="channel-meta">' + avatarHtml + '<div class="channel-text"><div class="channel">' + Utils.escapeHtml(channelTitle) + '</div><div class="card-date">' + Utils.escapeHtml(uploadDate) + '</div></div></div></div>';
+
+        ptrIsDown = false;
+        ptrTimer = null;
+        ptrLongPressed = false;
+
+        cardEl.addEventListener('mousedown', function () {
+            ptrIsDown = true;
+            ptrLongPressed = false;
+            ptrTimer = setTimeout(function () {
+                ptrLongPressed = true;
+                if (claim.signing_channel) {
+                    window.lastFocusedCard = cardEl;
+                    triggerOpenChannel(claim.signing_channel);
+                }
+            }, 1200);
+        });
+
+        cardEl.addEventListener('touchstart', function () {
+            ptrIsDown = true;
+            ptrLongPressed = false;
+            ptrTimer = setTimeout(function () {
+                ptrLongPressed = true;
+                if (claim.signing_channel) {
+                    window.lastFocusedCard = cardEl;
+                    triggerOpenChannel(claim.signing_channel);
+                }
+            }, 1200);
+        });
+
+        cardEl.addEventListener('mouseup', cancelPointer);
+        cardEl.addEventListener('touchend', cancelPointer);
+
+        cardEl.addEventListener('mouseleave', function () {
+            ptrIsDown = false;
+            if (ptrTimer) {
+                clearTimeout(ptrTimer);
+                ptrTimer = null;
+            }
+        });
+
+        cardEl.addEventListener('touchcancel', function () {
+            ptrIsDown = false;
+            if (ptrTimer) {
+                clearTimeout(ptrTimer);
+                ptrTimer = null;
+            }
+        });
+
+        cardEl.addEventListener('longpress', function () {
+            if (claim.signing_channel) {
+                window.lastFocusedCard = cardEl;
+                triggerOpenChannel(claim.signing_channel);
+            }
+        });
+
+        cardEl.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            if (ptrIsDown || ptrLongPressed || window._spatialOkLongPressed) {
+                return;
+            }
+            if (ev.screenX > 0 || ev.screenY > 0) {
+                return;
+            }
+
+            if (!window.isChannelPageOpen) {
+                window.lastFocusedCard = cardEl;
+            } else {
+                window.lastFocusedChannelCard = cardEl;
+            }
+            triggerPlayVideo(claim);
+        });
+
+        return cardEl;
+    }
+
+    function initSearch() {
+        var searchBtn = document.getElementById('btn-search');
+        var searchInput = document.getElementById('search-input');
+
+        function triggerSearch() {
+            var val;
+            var btn;
+
+            if (!searchInput) {
+                return;
+            }
+            val = searchInput.value.trim();
+            if (val.length > 0) {
+                searchInput.blur();
+                btn = document.getElementById('btn-search');
+                if (btn) {
+                    SpatialNavigation.focusNode(btn);
+                }
+                doSearch(val);
+            }
+        }
+
+        if (searchBtn && searchInput) {
+            searchBtn.addEventListener('click', triggerSearch);
+            searchInput.addEventListener('keydown', function (e) {
                 if (e.keyCode === 13) {
                     e.preventDefault();
                     triggerSearch();
                 }
             });
-            i.addEventListener("focus", function () {
-                SpatialNavigation.focusNode(i);
+            searchInput.addEventListener('focus', function () {
+                SpatialNavigation.focusNode(searchInput);
             });
         }
     }
@@ -786,7 +983,7 @@ var Feed = (function () {
             return currentCategory;
         }
     };
-})();
+}());
 
 // Global backwards-compatibility aliases
 var loadPage = Feed.loadPage;

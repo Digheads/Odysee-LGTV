@@ -5,43 +5,51 @@
 
 // 1. Developer logging & Global error interception
 (function () {
-    var origLog = console.log,
-        origWarn = console.warn,
-        origError = console.error;
+    var origLog = console.log;
+    var origWarn = console.warn;
+    var origError = console.error;
 
     function forwardLog(level, args) {
         var text = Array.prototype.slice.call(args).map(function (item) {
-            return "object" == typeof item ? JSON.stringify(item) : item;
-        }).join(" ");
+            return typeof item === 'object' ? JSON.stringify(item) : item;
+        }).join(' ');
 
         try {
-            if ("undefined" != typeof RemoteLog) RemoteLog.push(level, text);
+            if (typeof RemoteLog !== 'undefined') {
+                RemoteLog.push(level, text);
+            }
         } catch (err) { }
     }
 
     console.log = function () {
-        forwardLog("log", arguments);
+        forwardLog('log', arguments);
         origLog.apply(console, arguments);
     };
 
     console.warn = function () {
-        forwardLog("warn", arguments);
-        if (origWarn) origWarn.apply(console, arguments);
-        else origLog.apply(console, arguments);
+        forwardLog('warn', arguments);
+        if (origWarn) {
+            origWarn.apply(console, arguments);
+        } else {
+            origLog.apply(console, arguments);
+        }
     };
 
     console.error = function () {
-        forwardLog("error", arguments);
+        forwardLog('error', arguments);
         origError.apply(console, arguments);
     };
 
-    window.onerror = function (msg, url, line, col, error) {
-        console.error("Global Error: " + msg + " at " + url + ":" + line);
+    window.onerror = function (msg, url, line) {
+        console.error('Global Error: ' + msg + ' at ' + url + ':' + line);
     };
-})();
+}());
 
 // 2. Application initialization on DOMContentLoaded
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener('DOMContentLoaded', function () {
+    var mainContent;
+    var releaseTimer;
+
     SpatialNavigation.init();
     SpatialNavigation.lock();
 
@@ -51,34 +59,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Safety fallback: unlock navigation after 15s in case network stalls
     setTimeout(function () {
+        var focused;
+        var activeMenu;
+
         if (SpatialNavigation.isLocked && SpatialNavigation.isLocked()) {
-            console.warn("Safety fallback: unlocking SpatialNavigation");
+            console.warn('Safety fallback: unlocking SpatialNavigation');
             SpatialNavigation.unlock();
             SpatialNavigation.refresh();
-            var focused = document.querySelector(".focused");
+            focused = document.querySelector('.focused');
             if (!focused) {
-                var activeMenu = document.querySelector(".nav-item.active");
-                if (activeMenu) SpatialNavigation.focusNode(activeMenu);
+                activeMenu = document.querySelector('.nav-item.active');
+                if (activeMenu) {
+                    SpatialNavigation.focusNode(activeMenu);
+                }
             }
         }
     }, 15000);
 
     // Clock sync first, load only afterwards: otherwise the `magic` parameter
     // would be invalid with a drifted TV clock and we'd get 401.
-    if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === "function") {
+    if (window.OdyseeAPI && typeof OdyseeAPI.syncServerTime === 'function') {
         OdyseeAPI.syncServerTime(function () {
             function proceed() {
                 OdyseeAPI.getSections(function (err, sections) {
-                    if (err) console.error("Failed to load categories: " + err.message);
+                    if (err) {
+                        console.error('Failed to load categories: ' + err.message);
+                    }
                     Navigation.buildNav(sections || []);
                     SpatialNavigation.refresh();
-                    Feed.loadPage("nav-trending");
+                    Feed.loadPage('nav-trending');
                 });
             }
 
-            if (window.Auth && typeof Auth.init === "function") {
+            if (window.Auth && typeof Auth.init === 'function') {
                 Auth.init(function (isLoggedIn) {
-                    console.log("App bootstrap: Auth initialized, loggedIn=" + isLoggedIn);
+                    console.log('App bootstrap: Auth initialized, loggedIn=' + isLoggedIn);
                     proceed();
                 });
             } else {
@@ -92,10 +107,10 @@ document.addEventListener("DOMContentLoaded", function () {
     Player.initUI();
 
     // Infinite scroll & offscreen thumbnail memory management
-    var mainContent = document.getElementById("main-content");
+    mainContent = document.getElementById('main-content');
     if (mainContent) {
-        var releaseTimer = null;
-        mainContent.addEventListener("scroll", function () {
+        releaseTimer = null;
+        mainContent.addEventListener('scroll', function () {
             if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 500) {
                 if (window.isChannelPageOpen) {
                     Channel.loadMore();
@@ -103,7 +118,9 @@ document.addEventListener("DOMContentLoaded", function () {
                     Feed.loadMoreContent();
                 }
             }
-            if (releaseTimer) clearTimeout(releaseTimer);
+            if (releaseTimer) {
+                clearTimeout(releaseTimer);
+            }
             releaseTimer = setTimeout(function () {
                 Feed.releaseOffscreenThumbs(mainContent);
             }, 300);
@@ -111,16 +128,17 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Global back navigation (History popstate)
-    window.addEventListener("popstate", function (e) {
-        var playerEl = document.getElementById("player-container");
-        if (playerEl && !playerEl.classList.contains("hidden")) {
-            if (window.Player && typeof Player.isCommentsOpen === "function" && Player.isCommentsOpen()) {
+    window.addEventListener('popstate', function () {
+        var playerEl = document.getElementById('player-container');
+
+        if (playerEl && !playerEl.classList.contains('hidden')) {
+            if (window.Player && typeof Player.isCommentsOpen === 'function' && Player.isCommentsOpen()) {
                 Player.closeComments();
             } else {
                 Player.close();
             }
         } else if (window.isPlaylistDetailOpen) {
-            if (window.Feed && typeof Feed.closePlaylistDetail === "function") {
+            if (window.Feed && typeof Feed.closePlaylistDetail === 'function') {
                 Feed.closePlaylistDetail(false, true);
             }
         } else if (window.isChannelPageOpen) {
@@ -129,16 +147,17 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Remote Back button interception when views are open
-    window.addEventListener("keydown", function (e) {
-        var playerEl = document.getElementById("player-container");
-        var isPlayerOpen = playerEl && !playerEl.classList.contains("hidden");
+    window.addEventListener('keydown', function (e) {
+        var playerEl = document.getElementById('player-container');
+        var isPlayerOpen = playerEl && !playerEl.classList.contains('hidden');
+        var keyCode;
 
         if (!isPlayerOpen && window.isPlaylistDetailOpen) {
-            var keyCode = e.keyCode;
-            if (413 === keyCode || 461 === keyCode || 8 === keyCode || 27 === keyCode || 10009 === keyCode) {
+            keyCode = e.keyCode;
+            if (keyCode === 413 || keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (window.Feed && typeof Feed.closePlaylistDetail === "function") {
+                if (window.Feed && typeof Feed.closePlaylistDetail === 'function') {
                     Feed.closePlaylistDetail();
                 }
                 return;
@@ -146,8 +165,8 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         if (!isPlayerOpen && window.isChannelPageOpen) {
-            var keyCode = e.keyCode;
-            if (413 === keyCode || 461 === keyCode || 8 === keyCode || 27 === keyCode || 10009 === keyCode) {
+            keyCode = e.keyCode;
+            if (keyCode === 413 || keyCode === 461 || keyCode === 8 || keyCode === 27 || keyCode === 10009) {
                 e.preventDefault();
                 history.back();
             }

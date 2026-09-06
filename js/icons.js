@@ -52,5 +52,4 @@ var Icons = (function () {
         },
         all: icons
     };
-})();
-
+}());
